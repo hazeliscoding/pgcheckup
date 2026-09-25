@@ -14,6 +14,10 @@ public sealed class ReadOnlySession : IAsyncDisposable
 
         // Stops a scan from queueing behind a migration's lock and blocking the traffic behind it.
         "SET LOCAL lock_timeout = '1s'",
+
+        // A function or operator planted in another schema can't shadow a built-in and run as
+        // the scanning role (CVE-2018-1058). pg_temp goes last so temporary tables can't either.
+        "SET LOCAL search_path = pg_catalog, pg_temp",
     ];
 
     private readonly NpgsqlDataSource dataSource;

@@ -22,7 +22,7 @@ Keep commands cross-platform (`dotnet`, `docker`), because the owner develops on
 
 The product is only as good as these rules. Never break them, not even in debug modes or dev tooling.
 
-- **Read-only, always.** A check is one `SELECT` against catalogs and statistics views. No DDL or DML, and no functions with side effects: `pg_terminate_backend`, `pg_cancel_backend`, `pg_reload_conf`, `pg_stat_reset*`, `pg_switch_wal`, `pg_create_*`, `pg_drop_*`, `pg_advisory_*`, `nextval`, `setval`, `set_config`, `txid_current`. Every statement pgcheckup sends runs inside `BEGIN READ ONLY` with `SET LOCAL statement_timeout` and `lock_timeout`, then rolls back. Never set anything for the whole session, because behind a transaction pooler it reaches the app's connections. Never weaken or bypass these guards.
+- **Read-only, always.** A check is one `SELECT` against catalogs and statistics views. No DDL or DML, and no functions with side effects: `pg_terminate_backend`, `pg_cancel_backend`, `pg_reload_conf`, `pg_stat_reset*`, `pg_switch_wal`, `pg_create_*`, `pg_drop_*`, `pg_advisory_*`, `nextval`, `setval`, `set_config`, `txid_current`. Every statement pgcheckup sends runs inside `BEGIN READ ONLY` with `SET LOCAL statement_timeout`, `lock_timeout` and `search_path = pg_catalog, pg_temp`, then rolls back. Never set anything for the whole session, because behind a transaction pooler it reaches the app's connections. Never weaken or bypass these guards.
 - **Fixes are text.** pgcheckup prints fix SQL and never executes it.
 - **Least privilege.** No check needs more than `pg_monitor`. Never require superuser or `rds_superuser`. If the role lacks a privilege, the check is skipped with the reason. It is never an error.
 - **No network beyond the Postgres connection.** No telemetry, update checks, crash reporting or remote lookups. Data such as end-of-life dates ships inside the release.
@@ -33,7 +33,7 @@ The product is only as good as these rules. Never break them, not even in debug 
 ## Checks
 
 - One folder per check: `checks/<id>/check.sql`, `check.md`, `fixtures/fires.sql` and `fixtures/healthy.sql`. The shape is in the `ROADMAP.md` decisions.
-- `check.sql` is one read-only query that returns values, never prose. The wording lives in the `message` and `fix` templates in `check.md`. Thresholds come in as `@name` parameters and are never hard-coded.
+- `check.sql` is one read-only query that returns values, never prose. The wording lives in the `message` and `fix` templates in `check.md`. Thresholds come in as `@name` parameters and are never hard-coded. The search path is `pg_catalog` only, so qualify anything in another schema.
 - Compute ages and durations in SQL from the server's `now()`, not the client's clock.
 - `check.md` has **What breaks**, **Fix** and **Seen in** sections. Every check has at least one **Seen in** link to a public incident or the Postgres docs. Never cite anything a reader can't open.
 - Both fixtures are required. `fires.sql` is the positive control, so a check without one isn't done. A fixture may lower a threshold (`-- threshold name = value`) when the real condition can't be reproduced at scale.
