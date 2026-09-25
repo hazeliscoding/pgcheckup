@@ -40,7 +40,7 @@ pgcheckup is a read-only CLI (.NET 10, NativeAOT) that checks a PostgreSQL datab
 - [x] Fixture runner on Testcontainers: for every check, `fires.sql` must produce a finding and `healthy.sql` must not.
 - [x] Read-only guard: the fixture runner runs each check as a role that has only `pg_monitor`, inside a `READ ONLY` transaction. Positive control: a test check that writes must fail.
 - [x] `pgcheckup scan` with terminal output and exit codes 0, 1 and 2.
-- [ ] CI on every PR: build, fixture tests on Postgres 14 to 18, and a NativeAOT publish that fails on any IL2xxx or IL3xxx warning.
+- [x] CI on every PR: build, fixture tests on Postgres 14 to 18, and a NativeAOT publish that fails on any IL2xxx or IL3xxx warning.
 - [x] Brand: the logo in `docs/brand/`, with `-dark` variants. Then replace the README heading with a `<picture>` lockup.
 - [x] Add a recording or screenshot of a scan to the README.
 
