@@ -5,82 +5,137 @@ using System.Text.RegularExpressions;
 
 namespace Pgcheckup.Checks.Generator;
 
+/// <summary>The files of one <c>checks/&lt;id&gt;/</c> folder, as the compiler needs them.</summary>
+/// <param name="id">The folder name, which must match the id in check.md.</param>
+/// <param name="checkMd">The contents of check.md, or <see langword="null"/> when the folder has none.</param>
+/// <param name="checkSql">The contents of check.sql, or <see langword="null"/> when the folder has none.</param>
+/// <param name="otherFiles">Every file in the folder, relative to it, with forward slashes.</param>
 public sealed class CheckFiles(string id, string? checkMd, string? checkSql, IReadOnlyCollection<string> otherFiles)
 {
+    /// <summary>The folder name, which must match the id in check.md.</summary>
     public string Id { get; } = id;
 
+    /// <summary>The contents of check.md, or <see langword="null"/> when the folder has none.</summary>
     public string? CheckMd { get; } = checkMd;
 
+    /// <summary>The contents of check.sql, or <see langword="null"/> when the folder has none.</summary>
     public string? CheckSql { get; } = checkSql;
 
-    // Paths relative to the check's folder, with forward slashes.
+    /// <summary>Every file in the folder, relative to it, with forward slashes, such as <c>fixtures/fires.sql</c>.</summary>
     public IReadOnlyCollection<string> OtherFiles { get; } = otherFiles;
 }
 
+/// <summary>A problem with a check, located in one of its files. The generator reports it as build error PGC001.</summary>
+/// <param name="file">The file, relative to the check's folder, such as <c>check.md</c>.</param>
+/// <param name="line">The 1-based line in that file.</param>
+/// <param name="message">What is wrong, in a sentence a check author can act on.</param>
 public sealed class CheckError(string file, int line, string message)
 {
+    /// <summary>The file, relative to the check's folder, such as <c>check.md</c>.</summary>
     public string File { get; } = file;
 
+    /// <summary>The 1-based line in that file.</summary>
     public int Line { get; } = line;
 
+    /// <summary>What is wrong, in a sentence a check author can act on.</summary>
     public string Message { get; } = message;
 
+    /// <inheritdoc/>
     public override string ToString() => $"{File}({Line}): {Message}";
 }
 
+/// <summary>A threshold that check.sql reads.</summary>
+/// <param name="name">The name that check.sql reads as <c>@name</c>.</param>
+/// <param name="value">Its default value.</param>
 public sealed class CompiledThreshold(string name, ThresholdValue value)
 {
+    /// <summary>The name that check.sql reads as <c>@name</c>.</summary>
     public string Name { get; } = name;
 
+    /// <summary>Its default value.</summary>
     public ThresholdValue Value { get; } = value;
 }
 
+/// <summary>A check that passed every build-time rule, ready to be emitted into the binary.</summary>
 public sealed class CompiledCheck
 {
+    /// <summary>The check's stable kebab-case id, equal to its folder name.</summary>
     public string Id { get; set; } = "";
 
+    /// <summary>A short title for <c>pgcheckup list</c>.</summary>
     public string Title { get; set; } = "";
 
+    /// <summary>One of <see cref="CheckCompiler.Categories"/>.</summary>
     public string Category { get; set; } = "";
 
+    /// <summary>The default severity of a finding, one of <see cref="CheckCompiler.Severities"/>.</summary>
     public string Severity { get; set; } = "";
 
+    /// <summary>The oldest Postgres major version the check runs on.</summary>
     public int MinVersion { get; set; }
 
+    /// <summary>The predefined roles the check needs, from <see cref="CheckCompiler.Privileges"/>. May be empty.</summary>
     public IReadOnlyList<string> Privileges { get; set; } = [];
 
+    /// <summary>The providers where the check is skipped, from <see cref="CheckCompiler.Providers"/>.</summary>
     public IReadOnlyList<string> SkipOn { get; set; } = [];
 
-    // In the order of their $n parameters.
+    /// <summary>The thresholds in the order of their <c>$n</c> parameters, so index 0 binds to <c>$1</c>.</summary>
     public IReadOnlyList<CompiledThreshold> Thresholds { get; set; } = [];
 
+    /// <summary>check.sql with thresholds rewritten to <c>$n</c> parameters.</summary>
     public string Sql { get; set; } = "";
 
+    /// <summary>The parsed message template.</summary>
     public IReadOnlyList<TemplatePart> Message { get; set; } = [];
 
+    /// <summary>The parsed fix template.</summary>
     public IReadOnlyList<TemplatePart> Fix { get; set; } = [];
 
+    /// <summary>The Markdown body of check.md, which <c>pgcheckup explain</c> prints.</summary>
     public string Note { get; set; } = "";
 }
 
+/// <summary>The outcome of <see cref="CheckCompiler.Compile"/>.</summary>
+/// <param name="check">The compiled check, or <see langword="null"/> when there are errors.</param>
+/// <param name="errors">Every problem found. Empty when the check compiled.</param>
 public sealed class CheckCompilation(CompiledCheck? check, IReadOnlyList<CheckError> errors)
 {
+    /// <summary>The compiled check, or <see langword="null"/> when there are errors.</summary>
     public CompiledCheck? Check { get; } = check;
 
+    /// <summary>Every problem found. Empty when the check compiled.</summary>
     public IReadOnlyList<CheckError> Errors { get; } = errors;
 }
 
+/// <summary>Applies every build-time rule to one check folder.</summary>
 public static class CheckCompiler
 {
+    /// <summary>The note and frontmatter file.</summary>
     public const string CheckMd = "check.md";
+
+    /// <summary>The query file.</summary>
     public const string CheckSqlFile = "check.sql";
+
+    /// <summary>The fixture the check must report on.</summary>
     public const string FiresFixture = "fixtures/fires.sql";
+
+    /// <summary>The fixture the check must stay quiet on.</summary>
     public const string HealthyFixture = "fixtures/healthy.sql";
 
+    /// <summary>The allowed values of <c>category</c>.</summary>
     public static readonly string[] Categories = ["ids", "cleanup", "wal", "capacity"];
+
+    /// <summary>The allowed values of <c>severity</c>, from most to least severe.</summary>
     public static readonly string[] Severities = ["critical", "warning", "info"];
+
+    /// <summary>The predefined roles a check may list under <c>privileges</c>. All are part of pg_monitor.</summary>
     public static readonly string[] Privileges = ["pg_monitor", "pg_read_all_settings", "pg_read_all_stats", "pg_stat_scan_tables"];
+
+    /// <summary>The managed providers a check may list under <c>skip_on</c>.</summary>
     public static readonly string[] Providers = ["rds", "aurora", "cloudsql", "azure", "supabase", "neon"];
+
+    /// <summary>The <c>##</c> sections every check.md body must have.</summary>
     public static readonly string[] Sections = ["What breaks", "Fix", "Seen in"];
 
     private static readonly string[] RequiredKeys = ["id", "title", "category", "severity", "min_version", "privileges", "message", "fix"];
@@ -89,6 +144,11 @@ public static class CheckCompiler
     private static readonly Regex KebabCase = new("^[a-z0-9]+(-[a-z0-9]+)*$", RegexOptions.CultureInvariant);
     private static readonly Regex SnakeCase = new("^[a-z][a-z0-9_]*$", RegexOptions.CultureInvariant);
 
+    /// <summary>
+    /// Compiles one check folder: its frontmatter, templates, body sections, SQL and fixtures.
+    /// </summary>
+    /// <param name="files">The folder's files.</param>
+    /// <returns>The compiled check, or every error found. Errors don't stop at the first one.</returns>
     public static CheckCompilation Compile(CheckFiles files)
     {
         var errors = new List<CheckError>();

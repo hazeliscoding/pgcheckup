@@ -10,6 +10,15 @@ using Microsoft.CodeAnalysis.Text;
 
 namespace Pgcheckup.Checks.Generator;
 
+/// <summary>
+/// Compiles every folder under <c>checks/</c> into the <c>CheckCatalog</c> class, so the binary
+/// carries its checks and parses nothing at runtime.
+/// </summary>
+/// <remarks>
+/// The checks folder comes from the <c>PgcheckupChecksDir</c> MSBuild property, and its files
+/// from <c>AdditionalFiles</c>. Every <see cref="CheckError"/> becomes build error PGC001 on the
+/// file and line it names.
+/// </remarks>
 [Generator(LanguageNames.CSharp)]
 public sealed class CheckGenerator : IIncrementalGenerator
 {
@@ -21,6 +30,7 @@ public sealed class CheckGenerator : IIncrementalGenerator
     private static readonly DiagnosticDescriptor NoChecksDir = new(
         "PGC002", "Checks folder not set", "{0}", "pgcheckup", DiagnosticSeverity.Error, isEnabledByDefault: true);
 
+    /// <inheritdoc/>
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         var root = context.AnalyzerConfigOptionsProvider.Select((options, _) =>
@@ -83,8 +93,10 @@ public sealed class CheckGenerator : IIncrementalGenerator
         code.AppendLine("#nullable enable");
         code.AppendLine("namespace Pgcheckup.Checks;");
         code.AppendLine();
+        code.AppendLine("/// <summary>The checks compiled from the checks folder at build time.</summary>");
         code.AppendLine("internal static partial class CheckCatalog");
         code.AppendLine("{");
+        code.AppendLine("    /// <summary>Every check, ordered by id.</summary>");
         code.AppendLine($"    public static global::System.Collections.Generic.IReadOnlyList<{ns}CheckDefinition> All {{ get; }} = new {ns}CheckDefinition[]");
         code.AppendLine("    {");
         foreach (var check in checks)

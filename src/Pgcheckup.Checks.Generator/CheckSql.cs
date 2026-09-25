@@ -5,8 +5,13 @@ using System.Text;
 
 namespace Pgcheckup.Checks.Generator;
 
+/// <summary>The outcome of compiling a check.sql with <see cref="CheckSql.Compile"/>.</summary>
 public sealed class SqlResult
 {
+    /// <summary>Creates a result.</summary>
+    /// <param name="sql">The SQL with <c>@name</c> rewritten to <c>$n</c> and a trailing semicolon removed.</param>
+    /// <param name="parameters">The threshold names, where the name at index 0 binds to <c>$1</c>.</param>
+    /// <param name="errors">Everything wrong with the SQL. Empty when it compiled.</param>
     public SqlResult(string sql, IReadOnlyList<string> parameters, IReadOnlyList<SourceError> errors)
     {
         Sql = sql;
@@ -14,13 +19,17 @@ public sealed class SqlResult
         Errors = errors;
     }
 
+    /// <summary>The SQL with <c>@name</c> rewritten to <c>$n</c> and a trailing semicolon removed.</summary>
     public string Sql { get; }
 
+    /// <summary>The threshold names in order of first use. The name at index 0 binds to <c>$1</c>.</summary>
     public IReadOnlyList<string> Parameters { get; }
 
+    /// <summary>Everything wrong with the SQL. Empty when it compiled.</summary>
     public IReadOnlyList<SourceError> Errors { get; }
 }
 
+/// <summary>Checks a check.sql against the read-only rules and prepares it to run.</summary>
 public static class CheckSql
 {
     // A READ ONLY transaction blocks DDL, DML, nextval and row locks, but not these. They signal
@@ -46,6 +55,13 @@ public static class CheckSql
         "query_to_xml", "table_to_xml", "cursor_to_xml", "schema_to_xml", "database_to_xml",
     ];
 
+    /// <summary>
+    /// Compiles a check.sql. It must be one statement that starts with <c>SELECT</c> or <c>WITH</c>,
+    /// read every declared threshold and nothing else, and call no function on the deny list.
+    /// </summary>
+    /// <param name="sql">The contents of check.sql.</param>
+    /// <param name="thresholds">The threshold names declared in check.md.</param>
+    /// <returns>The rewritten SQL, its parameter order and every error found.</returns>
     public static SqlResult Compile(string sql, IReadOnlyCollection<string> thresholds)
     {
         var errors = new List<SourceError>();

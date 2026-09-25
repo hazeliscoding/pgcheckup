@@ -2,33 +2,58 @@ using System.Collections.Generic;
 
 namespace Pgcheckup.Checks.Generator;
 
+/// <summary>A problem found in one file of a check, with the line it is on.</summary>
 public sealed class SourceError
 {
+    /// <summary>Creates an error for a line of the file being read.</summary>
+    /// <param name="line">The 1-based line number.</param>
+    /// <param name="message">What is wrong, in a sentence a check author can act on.</param>
     public SourceError(int line, string message)
     {
         Line = line;
         Message = message;
     }
 
+    /// <summary>The 1-based line number the error is on.</summary>
     public int Line { get; }
 
+    /// <summary>What is wrong, in a sentence a check author can act on.</summary>
     public string Message { get; }
 
+    /// <inheritdoc/>
     public override string ToString() => $"line {Line}: {Message}";
 }
 
+/// <summary>The kinds of token <see cref="SqlTokenizer"/> tells apart.</summary>
 public enum TokenKind
 {
+    /// <summary>A keyword or unquoted identifier, such as <c>SELECT</c> or <c>pg_stat_activity</c>.</summary>
     Word,
+
+    /// <summary>A double-quoted identifier. <see cref="Token.Text"/> holds the name without quotes.</summary>
     QuotedIdentifier,
+
+    /// <summary>A threshold reference such as <c>@min_age</c>. <see cref="Token.Text"/> holds the name without <c>@</c>.</summary>
     Parameter,
+
+    /// <summary>A positional parameter such as <c>$1</c>, which check.sql must not use.</summary>
     PositionalParameter,
+
+    /// <summary>A <c>;</c> outside any literal or comment.</summary>
     Semicolon,
+
+    /// <summary>Any other single character: operators, punctuation and digits.</summary>
     Other,
 }
 
+/// <summary>One token of a SQL text, with its position in that text.</summary>
 public readonly struct Token
 {
+    /// <summary>Creates a token.</summary>
+    /// <param name="kind">What kind of token it is.</param>
+    /// <param name="start">The 0-based offset of its first character in the SQL text.</param>
+    /// <param name="length">How many characters of the SQL text it covers.</param>
+    /// <param name="text">Its text, unquoted for identifiers and without <c>@</c> for parameters.</param>
     public Token(TokenKind kind, int start, int length, string text)
     {
         Kind = kind;
@@ -37,19 +62,32 @@ public readonly struct Token
         Text = text;
     }
 
+    /// <summary>What kind of token it is.</summary>
     public TokenKind Kind { get; }
 
+    /// <summary>The 0-based offset of its first character in the SQL text.</summary>
     public int Start { get; }
 
+    /// <summary>How many characters of the SQL text it covers, including quotes or <c>@</c>.</summary>
     public int Length { get; }
 
+    /// <summary>Its text, unquoted for identifiers and without <c>@</c> for parameters.</summary>
     public string Text { get; }
 }
 
-// Just enough of Postgres's lexer to tell code from comments, string literals and quoted
-// identifiers, so that checks on statements and function names can't be fooled by either.
+/// <summary>
+/// Just enough of Postgres's lexer to tell code from comments, string literals and quoted
+/// identifiers, so that checks on statements and function names can't be fooled by either.
+/// </summary>
 public static class SqlTokenizer
 {
+    /// <summary>Splits SQL into tokens, skipping whitespace, comments and string literals.</summary>
+    /// <param name="sql">The SQL text, such as a check.sql or a fixture.</param>
+    /// <param name="errors">Receives a <see cref="SourceError"/> for each comment, string or identifier that is never closed.</param>
+    /// <returns>
+    /// The tokens in order. String literals (standard, <c>E''</c> and dollar-quoted) and comments
+    /// produce no tokens.
+    /// </returns>
     public static List<Token> Tokenize(string sql, List<SourceError> errors)
     {
         var tokens = new List<Token>();
@@ -233,6 +271,7 @@ public static class SqlTokenizer
 
     private static bool IsIdentifierPart(char c) => IsIdentifierStart(c) || char.IsDigit(c) || c == '$';
 
+    /// <summary>The 1-based line that a 0-based offset falls on.</summary>
     internal static int LineOf(string text, int position)
     {
         var line = 1;
