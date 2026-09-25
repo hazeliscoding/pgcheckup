@@ -11,8 +11,18 @@ public static class PgcheckupCli
     public const int FindingsReachedFailOn = 1;
     public const int CouldNotRun = 2;
 
+    public static Task<int> RunAsync(
+        string[] args,
+        TextWriter output,
+        TextWriter error,
+        IReadOnlyDictionary<string, string?> environment,
+        bool outputRedirected,
+        CancellationToken cancellationToken) =>
+        RunAsync(args, CheckCatalog.All, output, error, environment, outputRedirected, cancellationToken);
+
     public static async Task<int> RunAsync(
         string[] args,
+        IReadOnlyList<CheckDefinition> checks,
         TextWriter output,
         TextWriter error,
         IReadOnlyDictionary<string, string?> environment,
@@ -22,7 +32,7 @@ public static class PgcheckupCli
         var root = new RootCommand("Checks a PostgreSQL database for the problems that cause outages. Read-only, and safe to run on production.");
 
         var list = new Command("list", "List every check.");
-        list.SetAction(_ => List(output));
+        list.SetAction(_ => List(checks, output));
         root.Subcommands.Add(list);
 
         var connection = new Argument<string?>("connection")
@@ -41,7 +51,7 @@ public static class PgcheckupCli
         scan.Arguments.Add(connection);
         scan.Options.Add(failOn);
         scan.SetAction((result, token) => ScanAsync(
-            result.GetValue(connection), result.GetValue(failOn)!, output, error, environment, outputRedirected, token));
+            result.GetValue(connection), result.GetValue(failOn)!, checks, output, error, environment, outputRedirected, token));
         root.Subcommands.Add(scan);
 
         var parsed = root.Parse(args);
@@ -58,13 +68,24 @@ public static class PgcheckupCli
             return CouldNotRun;
         }
 
-        return await parsed.InvokeAsync(new InvocationConfiguration { Output = output, Error = error }, cancellationToken);
+        // System.CommandLine's own handler would print a stack trace and exit 1, which means findings.
+        try
+        {
+            return await parsed.InvokeAsync(
+                new InvocationConfiguration { Output = output, Error = error, EnableDefaultExceptionHandler = false },
+                cancellationToken);
+        }
+        catch (Exception problem)
+        {
+            error.WriteLine($"pgcheckup: the scan stopped: {problem.Message}");
+            return CouldNotRun;
+        }
     }
 
-    private static int List(TextWriter output)
+    private static int List(IReadOnlyList<CheckDefinition> checks, TextWriter output)
     {
-        var width = CheckCatalog.All.Max(c => c.Id.Length) + 2;
-        foreach (var check in CheckCatalog.All)
+        var width = checks.Max(c => c.Id.Length) + 2;
+        foreach (var check in checks)
         {
             output.WriteLine($"{check.Id.PadRight(width)}{check.Severity.ToString().ToLowerInvariant(),-10}{check.Title}");
         }
@@ -75,6 +96,7 @@ public static class PgcheckupCli
     private static async Task<int> ScanAsync(
         string? input,
         string failOn,
+        IReadOnlyList<CheckDefinition> checks,
         TextWriter output,
         TextWriter error,
         IReadOnlyDictionary<string, string?> environment,
@@ -109,7 +131,7 @@ public static class PgcheckupCli
             ScanReport report;
             try
             {
-                report = await Scanner.ScanAsync(session, host, CheckCatalog.All, cancellationToken);
+                report = await Scanner.ScanAsync(session, host, checks, cancellationToken);
             }
             catch (Exception problem) when (problem is CheckFailedException or NpgsqlException)
             {

@@ -43,7 +43,7 @@ public static class Scanner
             {
                 results.Add(new CheckResult(check, await CheckRunner.RunAsync(session, check, cancellationToken)));
             }
-            catch (Exception error) when (error is CheckException or Npgsql.NpgsqlException)
+            catch (Exception error) when (error is not OperationCanceledException)
             {
                 throw new CheckFailedException(check.Id, error);
             }

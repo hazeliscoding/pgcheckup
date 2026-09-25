@@ -63,14 +63,19 @@ public readonly struct ThresholdValue
             return false;
         }
 
-        var number = decimal.Parse(match.Groups[1].Value, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture);
+        // Checked before any unit is applied, so the multiplication below can't overflow decimal.
+        if (!decimal.TryParse(match.Groups[1].Value, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var number)
+            || number > long.MaxValue)
+        {
+            error = $"'{text}' is too large for a threshold.";
+            return false;
+        }
+
         var unit = match.Groups[2].Value;
         if (unit.Length == 0)
         {
             var kind = match.Groups[1].Value.Contains(".") ? ThresholdKind.Number : ThresholdKind.Integer;
-            value = new ThresholdValue(kind, number, text);
-            error = "";
-            return true;
+            return InRange(new ThresholdValue(kind, number, text), out value, out error);
         }
 
         if (!Units.TryGetValue(unit, out var known))
@@ -79,7 +84,20 @@ public readonly struct ThresholdValue
             return false;
         }
 
-        value = new ThresholdValue(known.Kind, Math.Round(number * known.Factor, MidpointRounding.AwayFromZero), text);
+        return InRange(new ThresholdValue(known.Kind, Math.Round(number * known.Factor, MidpointRounding.AwayFromZero), text), out value, out error);
+    }
+
+    // Thresholds bind as bigint or interval, so they must fit in 64 bits.
+    private static bool InRange(ThresholdValue candidate, out ThresholdValue value, out string error)
+    {
+        if (candidate.Value > long.MaxValue)
+        {
+            value = default;
+            error = $"'{candidate.Text}' is too large for a threshold.";
+            return false;
+        }
+
+        value = candidate;
         error = "";
         return true;
     }
