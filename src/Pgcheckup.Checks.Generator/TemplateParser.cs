@@ -5,35 +5,55 @@ using System.Text.RegularExpressions;
 
 namespace Pgcheckup.Checks.Generator;
 
+/// <summary>One piece of a parsed message or fix template.</summary>
 public abstract class TemplatePart
 {
 }
 
+/// <summary>Literal text, copied as written.</summary>
+/// <param name="text">The text, with doubled braces and brackets already reduced to one.</param>
 public sealed class TextPart(string text) : TemplatePart
 {
+    /// <summary>The text, with doubled braces and brackets already reduced to one.</summary>
     public string Text { get; } = text;
 }
 
+/// <summary>A <c>{name}</c> or <c>{name:format}</c> placeholder for a column of the check's query.</summary>
+/// <param name="name">The column name.</param>
+/// <param name="format">One of <see cref="TemplateParser.Formats"/>, or <see langword="null"/> to format by the value's type.</param>
 public sealed class ValuePart(string name, string? format) : TemplatePart
 {
+    /// <summary>The column name.</summary>
     public string Name { get; } = name;
 
+    /// <summary>One of <see cref="TemplateParser.Formats"/>, or <see langword="null"/> to format by the value's type.</summary>
     public string? Format { get; } = format;
 }
 
+/// <summary>A <c>[ … ]</c> section, left out of the message when any value inside it is NULL.</summary>
+/// <param name="parts">Its text and values. Sections don't nest.</param>
 public sealed class SectionPart(IReadOnlyList<TemplatePart> parts) : TemplatePart
 {
+    /// <summary>Its text and values. Sections don't nest.</summary>
     public IReadOnlyList<TemplatePart> Parts { get; } = parts;
 }
 
-// Message and fix templates: {name} or {name:format} inserts a value, [ … ] is left out when a
-// value inside it is NULL, and doubled braces or brackets stand for themselves.
+/// <summary>
+/// Parses message and fix templates: <c>{name}</c> or <c>{name:format}</c> inserts a value,
+/// <c>[ … ]</c> is left out when a value inside it is NULL, and doubled braces or brackets
+/// stand for themselves.
+/// </summary>
 public static class TemplateParser
 {
+    /// <summary>The formats a placeholder may name: <c>bytes</c> prints "48 GB" and <c>count</c> prints "1.61 billion".</summary>
     public static readonly string[] Formats = ["bytes", "count"];
 
     private static readonly Regex Placeholder = new(@"^([a-z_][a-z0-9_]*)(?::([a-z]+))?$", RegexOptions.CultureInvariant);
 
+    /// <summary>Parses a template from check.md.</summary>
+    /// <param name="template">The template text.</param>
+    /// <param name="errors">Receives every problem found. Empty when the template is valid.</param>
+    /// <returns>The parts in order. Only trust them when <paramref name="errors"/> is empty.</returns>
     public static IReadOnlyList<TemplatePart> Parse(string template, out List<string> errors)
     {
         errors = [];

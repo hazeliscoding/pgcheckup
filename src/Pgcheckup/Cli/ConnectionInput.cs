@@ -4,12 +4,17 @@ using Npgsql;
 
 namespace Pgcheckup.Cli;
 
-// Errors say which part is wrong without repeating any of the input, which may hold a password.
+/// <summary>A connection string or URL that can't be read.</summary>
+/// <param name="message">
+/// Which part is wrong. It never repeats any of the input, which may hold a password.
+/// </param>
 public sealed class ConnectionInputException(string message) : Exception(message);
 
-// Reads connections the way psql does: a postgres:// URL, a libpq key-value string, or nothing,
-// with PGHOST, PGPORT, PGDATABASE and PGSSLMODE filling in what the input leaves out. Npgsql
-// reads PGUSER, PGPASSWORD, PGPASSFILE and ~/.pgpass itself.
+/// <summary>
+/// Reads connections the way psql does: a <c>postgres://</c> URL, a libpq key-value string, or
+/// nothing, with PGHOST, PGPORT, PGDATABASE and PGSSLMODE filling in what the input leaves out.
+/// </summary>
+/// <remarks>Npgsql reads PGUSER, PGPASSWORD, PGPASSFILE and ~/.pgpass itself.</remarks>
 public static class ConnectionInput
 {
     private static readonly (string Variable, string Key)[] Environment =
@@ -54,6 +59,17 @@ public static class ConnectionInput
         ["fallback_application_name"] = (_, _) => { },
     };
 
+    /// <summary>Turns what the user passed into Npgsql connection settings.</summary>
+    /// <param name="input">
+    /// A <c>postgres://</c> or <c>postgresql://</c> URL, a libpq key-value string, or
+    /// <see langword="null"/> or blank to use the environment alone.
+    /// </param>
+    /// <param name="environment">The process's environment variables.</param>
+    /// <returns>The settings, with the host defaulting to localhost.</returns>
+    /// <exception cref="ConnectionInputException">
+    /// The input isn't a URL or key-value string, or has a parameter pgcheckup doesn't read, a
+    /// port or timeout that isn't a number, or an unknown sslmode.
+    /// </exception>
     public static NpgsqlConnectionStringBuilder Parse(string? input, IReadOnlyDictionary<string, string?> environment)
     {
         var values = new Dictionary<string, string>(StringComparer.Ordinal);

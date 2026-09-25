@@ -3,16 +3,32 @@ using Pgcheckup.Engine;
 
 namespace Pgcheckup.Cli;
 
+/// <summary>The report <c>pgcheckup scan</c> prints to a terminal.</summary>
 public static class TerminalReport
 {
     private const int Indent = 10;
     private const string FixLabel = "Fix: ";
 
+    /// <summary>Whether to color the severity words.</summary>
+    /// <param name="outputRedirected">Whether the report goes to a file or pipe.</param>
+    /// <param name="environment">The process's environment variables.</param>
+    /// <returns>
+    /// <see langword="false"/> when output is redirected, NO_COLOR is set to anything but an
+    /// empty string, or TERM is dumb.
+    /// </returns>
     public static bool UseColor(bool outputRedirected, IReadOnlyDictionary<string, string?> environment) =>
         !outputRedirected
         && !(environment.TryGetValue("NO_COLOR", out var noColor) && !string.IsNullOrEmpty(noColor))
         && !(environment.TryGetValue("TERM", out var term) && term == "dumb");
 
+    /// <summary>
+    /// Writes the header, then each finding with its fix, then a summary that counts each check
+    /// once at its worst severity.
+    /// </summary>
+    /// <param name="output">Where to write.</param>
+    /// <param name="report">What the scan found.</param>
+    /// <param name="color">Whether to color the severity words. The words are always there.</param>
+    /// <remarks>Findings are ordered by severity, most severe first, then by check id.</remarks>
     public static void Write(TextWriter output, ScanReport report, bool color)
     {
         var server = report.Server;

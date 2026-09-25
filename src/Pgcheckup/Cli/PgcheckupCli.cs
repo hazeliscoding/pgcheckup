@@ -5,12 +5,26 @@ using Pgcheckup.Engine;
 
 namespace Pgcheckup.Cli;
 
+/// <summary>The <c>pgcheckup</c> command line: its commands, options and exit codes.</summary>
 public static class PgcheckupCli
 {
+    /// <summary>Exit code 0: the scan ran and no finding reached <c>--fail-on</c>.</summary>
     public const int Passed = 0;
+
+    /// <summary>Exit code 1: at least one finding reached <c>--fail-on</c>.</summary>
     public const int FindingsReachedFailOn = 1;
+
+    /// <summary>Exit code 2: the scan couldn't run, whatever the reason.</summary>
     public const int CouldNotRun = 2;
 
+    /// <summary>Runs pgcheckup with every check compiled into the binary.</summary>
+    /// <param name="args">The command-line arguments.</param>
+    /// <param name="output">Where the report and help go.</param>
+    /// <param name="error">Where errors go.</param>
+    /// <param name="environment">The process's environment variables, for PG* settings and NO_COLOR.</param>
+    /// <param name="outputRedirected">Whether <paramref name="output"/> is a file or pipe, which turns color off.</param>
+    /// <param name="cancellationToken">Cancels the scan.</param>
+    /// <returns>0, 1 or 2. See <see cref="Passed"/>, <see cref="FindingsReachedFailOn"/> and <see cref="CouldNotRun"/>.</returns>
     public static Task<int> RunAsync(
         string[] args,
         TextWriter output,
@@ -20,6 +34,18 @@ public static class PgcheckupCli
         CancellationToken cancellationToken) =>
         RunAsync(args, CheckCatalog.All, output, error, environment, outputRedirected, cancellationToken);
 
+    /// <summary>Runs pgcheckup with the given checks.</summary>
+    /// <param name="args">The command-line arguments.</param>
+    /// <param name="checks">The checks that <c>list</c> shows and <c>scan</c> runs.</param>
+    /// <param name="output">Where the report and help go.</param>
+    /// <param name="error">Where errors go.</param>
+    /// <param name="environment">The process's environment variables, for PG* settings and NO_COLOR.</param>
+    /// <param name="outputRedirected">Whether <paramref name="output"/> is a file or pipe, which turns color off.</param>
+    /// <param name="cancellationToken">Cancels the scan.</param>
+    /// <returns>
+    /// 0, 1 or 2. Anything that stops the scan, including bad arguments and unexpected errors,
+    /// returns 2, never 1.
+    /// </returns>
     public static async Task<int> RunAsync(
         string[] args,
         IReadOnlyList<CheckDefinition> checks,

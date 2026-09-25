@@ -2,11 +2,17 @@ using System.Globalization;
 
 namespace Pgcheckup.Checks;
 
+/// <summary>Prints values the same way in every check, so numbers and durations read alike.</summary>
 public static class ValueText
 {
     private static readonly string[] ByteUnits = ["bytes", "kB", "MB", "GB", "TB", "PB"];
     private static readonly string[] CountUnits = ["million", "billion", "trillion"];
 
+    /// <summary>Prints a value from a query row.</summary>
+    /// <param name="value">A non-null value as Npgsql read it.</param>
+    /// <param name="format">How to print it.</param>
+    /// <returns>The text, without culture-specific formatting.</returns>
+    /// <exception cref="TemplateException"><paramref name="format"/> needs a number and <paramref name="value"/> isn't one.</exception>
     public static string Format(object value, ValueFormat format) => format switch
     {
         ValueFormat.Bytes => Bytes(ToDecimal(value)),
@@ -21,7 +27,9 @@ public static class ValueText
         },
     };
 
-    // Postgres's size units (1024-based, as in pg_size_pretty), with three significant digits.
+    /// <summary>Prints a size with Postgres's units (1024-based, as in pg_size_pretty) and three significant digits.</summary>
+    /// <param name="bytes">The size in bytes.</param>
+    /// <returns>Such as "512 bytes", "1.5 GB" or "48 GB".</returns>
     public static string Bytes(decimal bytes)
     {
         if (bytes < 1024)
@@ -40,6 +48,9 @@ public static class ValueText
         return $"{Significant(value)} {ByteUnits[unit]}";
     }
 
+    /// <summary>Prints a count with thousands separators, or in words from a million on.</summary>
+    /// <param name="count">The count.</param>
+    /// <returns>Such as "48,213", "48 million" or "1.61 billion".</returns>
     public static string Count(decimal count)
     {
         if (count < 1_000_000)
@@ -58,6 +69,9 @@ public static class ValueText
         return $"{Significant(value)} {CountUnits[unit]}";
     }
 
+    /// <summary>Prints a duration in its largest whole unit, rounded down.</summary>
+    /// <param name="span">The duration. A negative one prints as zero.</param>
+    /// <returns>Such as "3 days", "1 hour" or "45 seconds".</returns>
     public static string Duration(TimeSpan span)
     {
         if (span < TimeSpan.Zero)

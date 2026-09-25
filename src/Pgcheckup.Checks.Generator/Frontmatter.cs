@@ -5,48 +5,80 @@ using System.Text.RegularExpressions;
 
 namespace Pgcheckup.Checks.Generator;
 
+/// <summary>The shape of a frontmatter value.</summary>
 public enum EntryKind
 {
+    /// <summary>One value: plain, quoted, or a <c>|</c> or <c>&gt;</c> block.</summary>
     Scalar,
+
+    /// <summary>A <c>[a, b]</c> list on one line.</summary>
     List,
+
+    /// <summary>Indented <c>name: value</c> lines under an empty key.</summary>
     Map,
 }
 
+/// <summary>One top-level key of a check's frontmatter and its value.</summary>
+/// <param name="key">The key.</param>
+/// <param name="line">The 1-based line the key is on.</param>
+/// <param name="kind">The shape of its value.</param>
 public sealed class FrontmatterEntry(string key, int line, EntryKind kind)
 {
+    /// <summary>The key.</summary>
     public string Key { get; } = key;
 
+    /// <summary>The 1-based line the key is on.</summary>
     public int Line { get; } = line;
 
-    // For block scalars, the line where the content starts.
+    /// <summary>The line where the value starts: the key's line, or the next one for a block scalar.</summary>
     public int ValueLine { get; set; } = line;
 
+    /// <summary>The shape of the value, which says which of <see cref="Scalar"/>, <see cref="Items"/> and <see cref="Map"/> is set.</summary>
     public EntryKind Kind { get; } = kind;
 
+    /// <summary>The value of a <see cref="EntryKind.Scalar"/> entry, unquoted, with a block scalar joined and trimmed.</summary>
     public string Scalar { get; set; } = "";
 
+    /// <summary>The items of a <see cref="EntryKind.List"/> entry, unquoted.</summary>
     public List<string> Items { get; } = [];
 
+    /// <summary>The entries of a <see cref="EntryKind.Map"/> entry, in order and with their lines. Duplicates are kept.</summary>
     public List<(string Key, string Value, int Line)> Map { get; } = [];
 }
 
+/// <summary>A check.md split into its frontmatter entries and its Markdown body.</summary>
 public sealed class FrontmatterDocument
 {
+    /// <summary>The top-level entries in order. A duplicate key is kept and reported in <see cref="Errors"/>.</summary>
     public List<FrontmatterEntry> Entries { get; } = [];
 
+    /// <summary>The Markdown after the closing <c>---</c> line, trimmed.</summary>
     public string Body { get; set; } = "";
 
+    /// <summary>Everything that isn't valid frontmatter. Empty when the frontmatter parsed.</summary>
     public List<SourceError> Errors { get; } = [];
 }
 
-// A strict subset of YAML: top-level `key: value`, `[a, b]` lists, one level of nested
-// `name: value` maps, quoted scalars, and `|` or `>` block scalars. Anything else is an error
-// with a line number, rather than something a full YAML parser would read differently.
+/// <summary>
+/// Reads check.md frontmatter: a strict subset of YAML with top-level <c>key: value</c>,
+/// <c>[a, b]</c> lists, one level of nested <c>name: value</c> maps, quoted scalars, and
+/// <c>|</c> or <c>&gt;</c> block scalars.
+/// </summary>
+/// <remarks>
+/// Anything outside the subset is an error with a line number, rather than something a full
+/// YAML parser would read differently.
+/// </remarks>
 public static class Frontmatter
 {
     private static readonly Regex TopLevel = new(@"^([A-Za-z_][A-Za-z0-9_]*):(.*)$", RegexOptions.CultureInvariant);
     private static readonly Regex Nested = new(@"^\s+([^:\s]+):(.*)$", RegexOptions.CultureInvariant);
 
+    /// <summary>Parses a check.md.</summary>
+    /// <param name="markdown">The file's contents. CRLF line endings are accepted.</param>
+    /// <returns>
+    /// The entries, body and errors. When the file doesn't start with a frontmatter block,
+    /// the only error is on line 1 and there are no entries.
+    /// </returns>
     public static FrontmatterDocument Parse(string markdown)
     {
         var document = new FrontmatterDocument();
