@@ -103,9 +103,28 @@ public class CheckSqlTests
     [InlineData("SELECT pg_read_file('postgresql.conf')")]
     [InlineData("SELECT pg_switch_wal()")]
     [InlineData("SELECT pg_notify('c', 'x')")]
+    [InlineData("SELECT pg_logical_emit_message(false, 'x', 'y')")]
+    [InlineData("SELECT public.pg_stat_statements_reset()")]
+    [InlineData("SELECT loread(0, 1)")]
+    [InlineData("SELECT query_to_xml('SELECT pg_terminate_backend(1)', false, false, '')")]
+    [InlineData("SELECT query_to_xmlschema('SELECT 1', false, false, '')")]
+    [InlineData("SELECT table_to_xml('orders', false, false, '')")]
+    [InlineData("SELECT cursor_to_xml('c', 1, false, false, '')")]
+    [InlineData("SELECT schema_to_xml('public', false, false, '')")]
+    [InlineData("SELECT database_to_xml(false, false, '')")]
+    [InlineData("SELECT ts_stat('SELECT 1')")]
+    [InlineData("SELECT ts_rewrite('a'::tsquery, 'SELECT 1')")]
     public void Rejects_functions_with_side_effects(string sql)
     {
         Assert.Contains(Compile(sql).Errors, e => e.Line == 1 && e.Message.Contains("side effects"));
+    }
+
+    [Theory]
+    [InlineData("SELECT U&\"\0070g_terminate_backend\"(1)")]
+    [InlineData("SELECT u&\"x\" FROM t")]
+    public void Rejects_unicode_escaped_identifiers(string sql)
+    {
+        Assert.Contains(Compile(sql).Errors, e => e.Message.Contains("U&"));
     }
 
     [Theory]
