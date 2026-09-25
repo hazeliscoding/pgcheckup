@@ -111,27 +111,40 @@ public class ConnectionInputTests
         Assert.Equal("localhost", Parse("dbname=app").Host);
     }
 
-    [Theory]
-    [InlineData("postgres://db.example.com/app?colour=blue", "colour")]
-    [InlineData("host=db.example.com colour=blue", "colour")]
-    [InlineData("postgres://db.example.com/app?sslmode=sometimes", "sometimes")]
-    [InlineData("postgres://db.example.com:abc/app", "abc")]
-    [InlineData("mysql://db.example.com/app", "postgres://")]
-    [InlineData("host=db.example.com password='unterminated", "quote")]
-    public void Explains_what_is_wrong_with_the_input(string input, string named)
+    [Fact]
+    public void Reads_a_password_with_a_question_mark_as_psql_does()
     {
-        var error = Assert.Throws<ConnectionInputException>(() => Parse(input));
-
-        Assert.Contains(named, error.Message);
+        // libpq takes everything up to the first @ that comes before any / as credentials.
+        Assert.Equal("hun?ter2", Parse("postgres://checkup:hun?ter2@db.example.com/app").Password);
     }
 
     [Theory]
-    [InlineData("postgres://checkup:hunter2@db.example.com:abc/app")]
-    [InlineData("host=db.example.com password=hunter2 colour=blue")]
-    public void Never_repeats_the_password_in_an_error(string input)
+    [InlineData("postgres://db.example.com/app?colour=blue", "parameter pgcheckup doesn't read")]
+    [InlineData("host=db.example.com colour=blue", "parameter pgcheckup doesn't read")]
+    [InlineData("postgres://db.example.com/app?sslmode=sometimes", "verify-full")]
+    [InlineData("postgres://db.example.com:abc/app", "port")]
+    [InlineData("mysql://db.example.com/app", "postgres://")]
+    [InlineData("host=db.example.com password='unterminated", "quote")]
+    [InlineData("host=db.example.com dbname", "key=value")]
+    public void Explains_what_is_wrong_with_the_input(string input, string expected)
     {
         var error = Assert.Throws<ConnectionInputException>(() => Parse(input));
 
-        Assert.DoesNotContain("hunter2", error.Message);
+        Assert.Contains(expected, error.Message);
+    }
+
+    [Theory]
+    [InlineData("postgres://checkup:hunter2@db.example.com:abc/app", "hunter2", "abc")]
+    [InlineData("postgres://checkup:hun/ter2@db.example.com/app", "hun", "ter2")]
+    [InlineData("host=db.example.com password=hunter2 colour=blue", "hunter2", "colour")]
+    [InlineData("host=db.example.com password=hun ter2", "hun", "ter2")]
+    [InlineData("host=db.example.com port=hunter2", "hunter2", "hunter2")]
+    [InlineData("host=db.example.com sslmode=hunter2", "hunter2", "hunter2")]
+    public void Never_repeats_any_of_the_input_in_an_error(string input, string first, string second)
+    {
+        var error = Assert.Throws<ConnectionInputException>(() => Parse(input));
+
+        Assert.DoesNotContain(first, error.Message);
+        Assert.DoesNotContain(second, error.Message);
     }
 }
