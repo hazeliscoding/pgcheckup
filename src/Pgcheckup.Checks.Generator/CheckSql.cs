@@ -24,9 +24,11 @@ public sealed class SqlResult
 public static class CheckSql
 {
     // A READ ONLY transaction blocks DDL, DML, nextval and row locks, but not these. They signal
-    // or reconfigure the server, take locks, consume transaction IDs or read server files.
+    // or reconfigure the server, take locks, write WAL, consume transaction IDs, read server
+    // files or large objects, or run SQL passed in as a string, which this check can't see.
     private static readonly HashSet<string> DeniedFunctions = new(StringComparer.Ordinal)
     {
+        "ts_stat", "ts_rewrite", "loread", "lowrite", "pg_logical_emit_message", "pg_stat_statements_reset",
         "nextval", "setval", "set_config", "txid_current", "pg_current_xact_id",
         "pg_terminate_backend", "pg_cancel_backend", "pg_reload_conf", "pg_rotate_logfile",
         "pg_switch_wal", "pg_promote", "pg_notify", "pg_export_snapshot",
@@ -41,6 +43,7 @@ public static class CheckSql
     [
         "pg_stat_reset", "pg_create_", "pg_drop_", "pg_copy_", "pg_advisory_", "pg_try_advisory_",
         "pg_file_", "pg_wal_replay_", "pg_replication_origin_", "dblink", "lo_",
+        "query_to_xml", "table_to_xml", "cursor_to_xml", "schema_to_xml", "database_to_xml",
     ];
 
     public static SqlResult Compile(string sql, IReadOnlyCollection<string> thresholds)
@@ -75,9 +78,17 @@ public static class CheckSql
                     var name = token.Text.ToLowerInvariant();
                     if (DeniedFunctions.Contains(name) || DeniedPrefixes.Any(p => name.StartsWith(p, StringComparison.Ordinal)))
                     {
-                        errors.Add(new SourceError(SqlTokenizer.LineOf(sql, token.Start), $"check.sql calls {name}(), which has side effects that a READ ONLY transaction doesn't stop."));
+                        errors.Add(new SourceError(SqlTokenizer.LineOf(sql, token.Start), $"check.sql calls {name}(), which can have side effects or run SQL of its own that a READ ONLY transaction doesn't stop."));
                     }
 
+                    break;
+
+                // U&"..." spells an identifier with escapes, which would hide a denied name.
+                case TokenKind.Other when token.Text == "&" && i > 0 && i + 1 < tokens.Count
+                    && tokens[i - 1] is { Kind: TokenKind.Word, Text: "U" or "u" } unicode
+                    && unicode.Start + 1 == token.Start
+                    && tokens[i + 1].Kind == TokenKind.QuotedIdentifier:
+                    errors.Add(new SourceError(SqlTokenizer.LineOf(sql, token.Start), "check.sql uses a U&\"...\" identifier. Write the name plainly."));
                     break;
 
                 case TokenKind.PositionalParameter:
