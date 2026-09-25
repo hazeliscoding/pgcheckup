@@ -179,6 +179,15 @@ public class CheckCompilerTests
     }
 
     [Fact]
+    public void Reports_a_threshold_named_twice()
+    {
+        var error = SingleError(Compile(Markdown(ValidFrontmatter.Replace("  min_age: 1h", "  min_age: 1h\n  min_age: 2h"))));
+
+        Assert.Equal(11, error.Line);
+        Assert.Contains("min_age", error.Message);
+    }
+
+    [Fact]
     public void Reports_template_errors_on_the_template_line()
     {
         var error = SingleError(Compile(Markdown(ValidFrontmatter.Replace("{subject}", "{subject:gb}"))));
