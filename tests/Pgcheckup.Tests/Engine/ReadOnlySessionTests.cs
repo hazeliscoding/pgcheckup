@@ -31,6 +31,21 @@ public class ReadOnlySessionTests(PostgresServerFixture postgres) : IClassFixtur
     }
 
     [Fact]
+    public async Task Resolves_names_in_pg_catalog_before_anything_a_user_planted()
+    {
+        // An exact argument-type match in public would otherwise beat pg_catalog's polymorphic
+        // quote_literal(anyelement), and run as the scanning role (CVE-2018-1058).
+        await postgres.Server.ExecuteAsSuperuserAsync(
+            Cancel,
+            "CREATE FUNCTION public.quote_literal(name) RETURNS text LANGUAGE sql AS $$ SELECT 'planted' $$");
+
+        var row = Assert.Single(await QueryAsync("SELECT quote_literal('x'::name) AS quoted, current_setting('search_path') AS search_path"));
+
+        Assert.Equal("'x'", row["quoted"]);
+        Assert.Equal("pg_catalog, pg_temp", row["search_path"]);
+    }
+
+    [Fact]
     public async Task Ends_the_transaction_after_each_query()
     {
         await using var session = await ReadOnlySession.OpenAsync(postgres.Server.Checkup, Cancel);
@@ -66,7 +81,7 @@ public class ReadOnlySessionTests(PostgresServerFixture postgres) : IClassFixtur
         await postgres.Server.ExecuteAsSuperuserAsync(Cancel, "CREATE TABLE written (n int)", "GRANT INSERT ON written TO checkup");
 
         var error = await Assert.ThrowsAsync<PostgresException>(() =>
-            QueryAsync("WITH w AS (INSERT INTO written VALUES (1) RETURNING n) SELECT n FROM w"));
+            QueryAsync("WITH w AS (INSERT INTO public.written VALUES (1) RETURNING n) SELECT n FROM w"));
 
         Assert.Equal(PostgresErrorCodes.ReadOnlySqlTransaction, error.SqlState);
     }
@@ -90,7 +105,7 @@ public class ReadOnlySessionTests(PostgresServerFixture postgres) : IClassFixtur
             await lockTable.ExecuteNonQueryAsync(Cancel);
         }
 
-        var error = await Assert.ThrowsAsync<PostgresException>(() => QueryAsync("SELECT count(*) AS n FROM migrating"));
+        var error = await Assert.ThrowsAsync<PostgresException>(() => QueryAsync("SELECT count(*) AS n FROM public.migrating"));
 
         Assert.Equal(PostgresErrorCodes.LockNotAvailable, error.SqlState);
     }
