@@ -6,12 +6,16 @@ These are the working rules for agents in this repo. pgcheckup is a read-only CL
 
 - `README.md`: the pitch and the "safe to run on production" promises.
 - `ROADMAP.md`: decisions already made, the milestones, and what is out of scope. Check it before proposing features. Respect those decisions unless the owner reopens them. Record new or changed decisions there, with the date.
-- The repo is still in planning. Don't build past the current milestone without asking.
+- Work follows the milestones in `ROADMAP.md`. Don't build past the current milestone without asking.
 
 ## Commands
 
-There is no code yet. Add the build, test and publish commands here when M0 lands. Keep them cross-platform (`dotnet`, `docker`), because the owner develops on Windows. Avoid bash-only scripts.
+Keep commands cross-platform (`dotnet`, `docker`), because the owner develops on Windows. Avoid bash-only scripts.
 
+- Build: `dotnet build pgcheckup.slnx`. A broken check folder fails the build with its file and line.
+- Test: `dotnet test --project tests/Pgcheckup.Tests`. It needs Docker, and uses Postgres 18 unless `PGCHECKUP_TEST_POSTGRES` names another major (14 to 17). CI runs all five.
+- Publish: `dotnet publish src/Pgcheckup -c Release -r win-x64 -o out` (`linux-x64` on Linux). Trim and AOT warnings fail it.
+- Test the published binary: set `PGCHECKUP_BINARY` to it, then run `dotnet test --project tests/Pgcheckup.Tests -- --filter-class Pgcheckup.Tests.Cli.NativeBinaryTests`.
 - NativeAOT publish on this Windows machine fails with `'vswhere.exe' is not recognized` unless the VS Installer folder is on PATH. Run it as `$env:PATH = "C:\Program Files (x86)\Microsoft Visual Studio\Installer;$env:PATH"; dotnet publish …`. That is an environment problem, not an AOT warning.
 
 ## Safe to run on production (hard rules)
