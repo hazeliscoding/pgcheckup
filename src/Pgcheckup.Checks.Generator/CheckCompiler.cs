@@ -232,6 +232,12 @@ public static class CheckCompiler
 
             foreach (var (name, text, line) in thresholdEntry.Map)
             {
+                if (thresholdNames.Contains(name))
+                {
+                    errors.Add(new CheckError(CheckMd, line, $"The threshold {name} appears more than once."));
+                    continue;
+                }
+
                 thresholdNames.Add(name);
                 if (!SnakeCase.IsMatch(name))
                 {
