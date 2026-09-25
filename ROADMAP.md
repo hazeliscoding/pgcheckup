@@ -27,7 +27,7 @@ pgcheckup is a read-only CLI (.NET 10, NativeAOT) that checks a PostgreSQL datab
 - **Runtime:** .NET 10 (LTS) with NativeAOT, and Npgsql through `NpgsqlSlimDataSourceBuilder`. Trim and AOT warnings are errors.
 - **Distribution:** NativeAOT binaries for linux-x64, linux-arm64, osx-arm64 and win-x64 on GitHub Releases, with SHA-256 checksums, plus a container image on GHCR for CI. NativeAOT can't cross-compile between operating systems, so releases build on a runner matrix. A `dotnet tool` package comes in v0.2.
 - **The paid path comes later.** The CLI stays free and complete. A one-time audit report, hosted monitoring and a team dashboard are listed under Later and get built only if public signals show demand. They would be separate code.
-- **Brand:** pending. The logo comes from Claude Design and goes in `docs/brand/`, with `-dark` variants.
+- **Brand** is option 1A, "Scan": stacked layers read by a single probe line. The wordmark is Bricolage Grotesque SemiBold (optical size 34), converted to vector paths, with "pg" in Postgres blue (`#336791`, or `#5B9BD5` on dark). The assets are in `docs/brand/`, with `-dark` files for dark backgrounds.
 - **License:** Apache-2.0.
 
 ## M0: Placeholder (as soon as possible)
@@ -39,7 +39,7 @@ pgcheckup is a read-only CLI (.NET 10, NativeAOT) that checks a PostgreSQL datab
 - [ ] Read-only guard: the fixture runner runs each check as a role that has only `pg_monitor`, inside a `READ ONLY` transaction. Positive control: a test check that writes must fail.
 - [ ] `pgcheckup scan` with terminal output and exit codes 0, 1 and 2.
 - [ ] CI on every PR: build, fixture tests on Postgres 14 to 18, and a NativeAOT publish that fails on any IL2xxx or IL3xxx warning.
-- [ ] Brand: the logo in `docs/brand/`, with `-dark` variants. Then replace the README heading with a `<picture>` lockup.
+- [x] Brand: the logo in `docs/brand/`, with `-dark` variants. Then replace the README heading with a `<picture>` lockup.
 - [ ] Add a recording or screenshot of a scan to the README.
 
 **Done when:** CI is green, the NativeAOT binary reports an inactive replication slot on a Testcontainers Postgres and exits 1 with `--fail-on warning`, and a test PR that adds a writing check fails the read-only guard.

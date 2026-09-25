@@ -1,4 +1,9 @@
-# pgcheckup
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/lockup-dark.svg">
+    <img alt="pgcheckup" src="docs/brand/lockup.svg" height="40">
+  </picture>
+</h1>
 
 **Find the Postgres problems that take production down, before they do.** pgcheckup is a read-only CLI that checks a database for the failures that turn into outages, explains each one in plain words, and gives you the SQL to fix it.
 
