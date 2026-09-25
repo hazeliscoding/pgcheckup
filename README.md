@@ -11,7 +11,9 @@ In February 2019, one of the Postgres shards behind Mailchimp's Mandrill [ran ou
 
 Most of these failures show up in the system catalogs weeks ahead: a table's transaction ID age, a replication slot nobody reads, WAL archiving that failed last night. Teams without a DBA rarely look. pgcheckup looks for them and tells you what to do.
 
-> **Status:** planning. There is nothing to install yet. See [ROADMAP.md](ROADMAP.md).
+> **Status:** early development. The first check, `replication-slot-inactive`, runs end to end. There is no release to install yet. See [ROADMAP.md](ROADMAP.md).
+
+![pgcheckup scanning a database whose inactive replication slot is holding 1.07 GB of WAL](docs/scan.gif)
 
 ## How it works
 
