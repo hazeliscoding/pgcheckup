@@ -5,9 +5,19 @@
     <RootNamespace>Pgcheckup</RootNamespace>
     <PublishAot>true</PublishAot>
     <TrimmerSingleWarn>false</TrimmerSingleWarn>
+    <PgcheckupChecksDir>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../../checks/'))</PgcheckupChecksDir>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Npgsql" />
     <PackageReference Include="System.CommandLine" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Pgcheckup.Checks.Generator\Pgcheckup.Checks.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <CompilerVisibleProperty Include="PgcheckupChecksDir" />
+    <AdditionalFiles Include="$(PgcheckupChecksDir)**/*" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Without rewriting, Postgres itself rejects a check that sneaks in a second statement. -->
+    <RuntimeHostConfigurationOption Include="Npgsql.EnableSqlRewriting" Value="false" Trim="true" />
   </ItemGroup>
 </Project>
