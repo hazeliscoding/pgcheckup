@@ -14,5 +14,8 @@ CROSS JOIN LATERAL (
 WHERE NOT s.active
   -- A lost slot has already been invalidated and holds no WAL.
   AND s.wal_status IS DISTINCT FROM 'lost'
+  -- On a standby, a slot synced from the primary (Postgres 17 and later) always looks inactive,
+  -- and can't be dropped there. Its consumer is on the primary, where this check covers it.
+  AND NOT coalesce((to_jsonb(s) ->> 'synced')::boolean, false)
   AND w.retained_wal >= @min_retained_wal
 ORDER BY w.retained_wal DESC
