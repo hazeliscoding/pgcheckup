@@ -4,7 +4,7 @@ using Npgsql;
 
 namespace Pgcheckup.Cli;
 
-// Errors name the part that is wrong and never repeat the input, which may hold a password.
+// Errors say which part is wrong without repeating any of the input, which may hold a password.
 public sealed class ConnectionInputException(string message) : Exception(message);
 
 // Reads connections the way psql does: a postgres:// URL, a libpq key-value string, or nothing,
@@ -40,7 +40,7 @@ public static class ConnectionInput
         ["passfile"] = (b, v) => b.Passfile = v,
         ["sslmode"] = (b, v) => b.SslMode = SslModes.TryGetValue(v, out var mode)
             ? mode
-            : throw new ConnectionInputException($"sslmode {v} isn't one of {string.Join(", ", SslModes.Keys)}."),
+            : throw new ConnectionInputException($"sslmode must be one of {string.Join(", ", SslModes.Keys)}."),
         ["sslrootcert"] = (b, v) => b.RootCertificate = v,
         ["sslcert"] = (b, v) => b.SslCertificate = v,
         ["sslkey"] = (b, v) => b.SslKey = v,
@@ -85,10 +85,11 @@ public static class ConnectionInput
         // libpq's fallback when there's no Unix socket. Npgsql has no default at all.
         values.TryAdd("host", "localhost");
 
-        var unknown = values.Keys.FirstOrDefault(k => !Keywords.ContainsKey(k));
-        if (unknown != null)
+        // An unknown key may be half of a password with a space in it, so it isn't named.
+        if (values.Keys.Any(k => !Keywords.ContainsKey(k)))
         {
-            throw new ConnectionInputException($"pgcheckup doesn't know the connection parameter {unknown}.");
+            throw new ConnectionInputException(
+                $"The connection has a parameter pgcheckup doesn't read. It reads {string.Join(", ", Keywords.Keys)}.");
         }
 
         var settings = new NpgsqlConnectionStringBuilder();
@@ -103,6 +104,22 @@ public static class ConnectionInput
     private static void ReadUrl(string url, Dictionary<string, string> values)
     {
         var rest = url[(url.IndexOf("://", StringComparison.Ordinal) + 3)..];
+
+        // As in libpq, credentials run to the first @ that comes before any /, so a password
+        // may hold ? or : but a / in it must be percent-encoded.
+        var credentialsEnd = rest.IndexOfAny(['@', '/']);
+        if (credentialsEnd >= 0 && rest[credentialsEnd] == '@')
+        {
+            var userInfo = rest[..credentialsEnd];
+            rest = rest[(credentialsEnd + 1)..];
+            var colon = userInfo.IndexOf(':');
+            values["user"] = Uri.UnescapeDataString(colon >= 0 ? userInfo[..colon] : userInfo);
+            if (colon >= 0)
+            {
+                values["password"] = Uri.UnescapeDataString(userInfo[(colon + 1)..]);
+            }
+        }
+
         var query = "";
         var questionMark = rest.IndexOf('?');
         if (questionMark >= 0)
@@ -117,19 +134,6 @@ public static class ConnectionInput
         if (database.Length > 0)
         {
             values["dbname"] = Uri.UnescapeDataString(database);
-        }
-
-        var at = authority.LastIndexOf('@');
-        if (at >= 0)
-        {
-            var userInfo = authority[..at];
-            authority = authority[(at + 1)..];
-            var colon = userInfo.IndexOf(':');
-            values["user"] = Uri.UnescapeDataString(colon >= 0 ? userInfo[..colon] : userInfo);
-            if (colon >= 0)
-            {
-                values["password"] = Uri.UnescapeDataString(userInfo[(colon + 1)..]);
-            }
         }
 
         if (authority.Length > 0)
@@ -217,7 +221,7 @@ public static class ConnectionInput
 
             if (i >= input.Length || input[i] != '=')
             {
-                throw new ConnectionInputException($"The connection parameter {key} has no = and value.");
+                throw new ConnectionInputException("Part of the connection string isn't key=value. Put values that contain spaces in single quotes.");
             }
 
             i++;
@@ -252,7 +256,7 @@ public static class ConnectionInput
 
                 if (!closed)
                 {
-                    throw new ConnectionInputException($"The value of {key} opens a quote that never closes.");
+                    throw new ConnectionInputException("A value in the connection string opens a quote that never closes.");
                 }
             }
             else
@@ -275,5 +279,5 @@ public static class ConnectionInput
     private static int Number(string key, string value) =>
         int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var number)
             ? number
-            : throw new ConnectionInputException($"The {key} {value} isn't a number.");
+            : throw new ConnectionInputException($"The {key} in the connection isn't a number.");
 }
