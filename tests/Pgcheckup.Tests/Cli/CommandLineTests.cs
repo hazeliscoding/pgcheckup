@@ -1,3 +1,4 @@
+using Pgcheckup.Checks;
 using Pgcheckup.Cli;
 using Pgcheckup.Tests.Postgres;
 
@@ -72,6 +73,26 @@ public class ScanCommandTests(InactiveSlotFixture postgres) : IClassFixture<Inac
         Assert.Contains("Slot debezium has been inactive", output);
         Assert.Contains("SELECT pg_drop_replication_slot('debezium');", output);
         Assert.EndsWith("0 passed · 1 warning\n", output);
+    }
+
+    [Fact]
+    public async Task Exits_2_when_a_check_fails_in_a_way_nobody_planned_for()
+    {
+        // Npgsql can't read NaN into a decimal, so the runner throws something no catch expects.
+        var check = new CheckDefinition(
+            "nan-check", "NaN check", "wal", Severity.Critical, 14, [], [], [],
+            "SELECT 'a' AS subject, 'NaN'::numeric AS size",
+            new Template([new ValuePart("size", ValueFormat.Bytes)]),
+            new Template([new TextPart("nothing")]),
+            "");
+        var output = new StringWriter();
+        var error = new StringWriter();
+
+        var exitCode = await PgcheckupCli.RunAsync(
+            ["scan", await postgres.CheckupUrlAsync()], [check], output, error, new Dictionary<string, string?>(), outputRedirected: true, TestContext.Current.CancellationToken);
+
+        Assert.Equal(2, exitCode);
+        Assert.StartsWith("pgcheckup: ", error.ToString());
     }
 
     [Fact]

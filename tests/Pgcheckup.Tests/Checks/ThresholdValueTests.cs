@@ -57,6 +57,11 @@ public class ThresholdValueTests
     [InlineData("90%")]
     [InlineData("h")]
     [InlineData("1.5.1s")]
+    [InlineData("99999999TB")]
+    [InlineData("99999999999999999999")]
+    [InlineData("999999999999d")]
+    [InlineData("99999999999999999999999999999999")]
+    [InlineData("99999999999999999999TB")]
     public void Rejects_values_postgres_would_not_accept(string text)
     {
         Assert.False(ThresholdValue.TryParse(text, out _, out var error));
