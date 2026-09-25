@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Pgcheckup.Checks.Generator/Pgcheckup.Checks.Generator.csproj" />
+    <Project Path="src/Pgcheckup/Pgcheckup.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Pgcheckup.Tests/Pgcheckup.Tests.csproj" />
+  </Folder>
+</Solution>
