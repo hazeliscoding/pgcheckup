@@ -15,4 +15,7 @@
   <ItemGroup>
     <Using Include="Xunit" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\checks\**\fixtures\*.sql" LinkBase="checks" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

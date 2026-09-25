@@ -17,7 +17,6 @@
     <AdditionalFiles Include="$(PgcheckupChecksDir)**/*" />
   </ItemGroup>
   <ItemGroup>
-    <!-- Without rewriting, Postgres itself rejects a check that sneaks in a second statement. -->
-    <RuntimeHostConfigurationOption Include="Npgsql.EnableSqlRewriting" Value="false" Trim="true" />
+    <InternalsVisibleTo Include="Pgcheckup.Tests" />
   </ItemGroup>
 </Project>
