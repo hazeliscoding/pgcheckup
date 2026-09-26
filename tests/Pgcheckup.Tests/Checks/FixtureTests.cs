@@ -11,10 +11,16 @@ public class FixtureTests
 {
     private static CancellationToken Cancel => TestContext.Current.CancellationToken;
 
+    // PGCHECKUP_TEST_CHECK=<id> runs one check's fixtures, which is quicker while writing a check.
+    private static IEnumerable<CheckDefinition> Selected =>
+        Environment.GetEnvironmentVariable("PGCHECKUP_TEST_CHECK") is { Length: > 0 } id
+            ? CheckCatalog.All.Where(c => c.Id == id)
+            : CheckCatalog.All;
+
     public static TheoryData<string, string> Fixtures()
     {
         var data = new TheoryData<string, string>();
-        foreach (var check in CheckCatalog.All)
+        foreach (var check in Selected)
         {
             data.Add(check.Id, "fires");
             data.Add(check.Id, "healthy");
@@ -23,7 +29,7 @@ public class FixtureTests
         return data;
     }
 
-    public static TheoryData<string> Checks() => new(CheckCatalog.All.Select(c => c.Id));
+    public static TheoryData<string> Checks() => new(Selected.Select(c => c.Id));
 
     [Theory]
     [MemberData(nameof(Fixtures))]
