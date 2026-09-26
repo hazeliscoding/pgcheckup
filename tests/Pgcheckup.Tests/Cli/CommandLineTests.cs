@@ -29,6 +29,7 @@ public class CommandLineTests
     [Theory]
     [InlineData("scan", "--nope")]
     [InlineData("scan", "--fail-on", "sometimes")]
+    [InlineData("scan", "--format", "yaml")]
     [InlineData("frobnicate")]
     public async Task Exits_2_when_the_arguments_are_wrong(params string[] args)
     {
@@ -100,6 +101,27 @@ public class ScanCommandTests(InactiveSlotFixture postgres) : IClassFixture<Inac
     public async Task Exits_1_when_a_finding_reaches_fail_on()
     {
         Assert.Equal(1, (await ScanAsync([SlotCheck], "--fail-on", "warning")).ExitCode);
+    }
+
+    [Fact]
+    public async Task Writes_json_with_the_same_exit_codes()
+    {
+        var (exitCode, output, _) = await ScanAsync([SlotCheck], "--format", "json", "--fail-on", "warning");
+
+        Assert.Equal(1, exitCode);
+        using var json = System.Text.Json.JsonDocument.Parse(output);
+        Assert.Equal(1, json.RootElement.GetProperty("schema").GetInt32());
+        Assert.Equal("warning", json.RootElement.GetProperty("checks")[0].GetProperty("status").GetString());
+    }
+
+    [Fact]
+    public async Task Writes_markdown()
+    {
+        var (exitCode, output, _) = await ScanAsync([SlotCheck], "--format", "markdown");
+
+        Assert.Equal(0, exitCode);
+        Assert.StartsWith("## pgcheckup · app on ", output);
+        Assert.Contains("| Warning | `replication-slot-inactive` |", output);
     }
 
     [Fact]

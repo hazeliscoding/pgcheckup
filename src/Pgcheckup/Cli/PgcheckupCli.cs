@@ -1,4 +1,5 @@
 using System.CommandLine;
+using System.Reflection;
 using Npgsql;
 using Pgcheckup.Checks;
 using Pgcheckup.Engine;
@@ -16,6 +17,9 @@ public static class PgcheckupCli
 
     /// <summary>Exit code 2: the scan couldn't run, whatever the reason.</summary>
     public const int CouldNotRun = 2;
+
+    private static string Version =>
+        typeof(PgcheckupCli).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "unknown";
 
     /// <summary>Runs pgcheckup with every check compiled into the binary.</summary>
     /// <param name="args">The command-line arguments.</param>
@@ -102,12 +106,19 @@ public static class PgcheckupCli
             DefaultValueFactory = _ => "critical",
         };
         failOn.AcceptOnlyFromAmong("critical", "warning", "info");
+        var format = new Option<string>("--format")
+        {
+            Description = "How to write the report: terminal, json (see docs/json.md) or markdown.",
+            DefaultValueFactory = _ => "terminal",
+        };
+        format.AcceptOnlyFromAmong("terminal", "json", "markdown");
 
         var scan = new Command("scan", "Scan a database and report what could take it down.");
         scan.Arguments.Add(connection);
         scan.Options.Add(failOn);
+        scan.Options.Add(format);
         scan.SetAction((result, token) => ScanAsync(
-            result.GetValue(connection), result.GetValue(failOn)!, checks, output, error, environment, outputRedirected, token));
+            result.GetValue(connection), result.GetValue(failOn)!, result.GetValue(format)!, checks, output, error, environment, outputRedirected, token));
         root.Subcommands.Add(scan);
 
         var parsed = root.Parse(args);
@@ -153,6 +164,7 @@ public static class PgcheckupCli
     private static async Task<int> ScanAsync(
         string? input,
         string failOn,
+        string format,
         IReadOnlyList<CheckDefinition> checks,
         TextWriter output,
         TextWriter error,
@@ -196,7 +208,18 @@ public static class PgcheckupCli
                 return CouldNotRun;
             }
 
-            TerminalReport.Write(output, report, TerminalReport.UseColor(outputRedirected, environment));
+            switch (format)
+            {
+                case "json":
+                    output.WriteLine(JsonReport.Write(report, Version));
+                    break;
+                case "markdown":
+                    output.Write(MarkdownReport.Write(report));
+                    break;
+                default:
+                    TerminalReport.Write(output, report, TerminalReport.UseColor(outputRedirected, environment));
+                    break;
+            }
 
             var threshold = failOn switch
             {
