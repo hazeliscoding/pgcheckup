@@ -40,6 +40,7 @@ pgcheckup is a read-only CLI (.NET 10, NativeAOT) that checks a PostgreSQL datab
 - **Fixture directives.** `-- server name = value` starts the fixture's container with that setting, for settings that need a restart (`max_prepared_transactions`, `archive_mode`). `-- expect error` lets the next statement fail, such as a `CREATE INDEX CONCURRENTLY` that leaves an invalid index.
 - **`postgres-eol` is a SQL check.** The end-of-life dates ship in a `VALUES` list in its `check.sql` and are compared with the server's clock, so no client clock is read.
 - **Quiet on stock Postgres.** Stock Postgres ships with `max_slot_wal_keep_size = -1` and no `idle_in_transaction_session_timeout`, and flagging every database for them would teach people to ignore pgcheckup. `replication-slot-unbounded` fires only when a slot exists. An unset timeout is `info`, and sessions idle in a transaction are `warning`.
+- **The check table follows the desk research.** Public postmortems cluster around vacuum: transaction ID wraparound (6) and old snapshots holding vacuum back (5), then WAL filling the disk and connection exhaustion (3 each). So `collation-version-mismatch` joins, sessions idle in a transaction are reported by `long-transaction`, `idle-in-transaction` becomes `idle-transaction-timeout`, and the autovacuum settings move from `dangerous-settings` into `autovacuum-disabled` (was `autovacuum-disabled-table`). Lock queues, missing statistics, MultiXact member space and pooler exhaustion can't be predicted from catalog state. `sync-standby-missing` has too little evidence for v0.1 and goes under Later.
 - **JSON `schema: 1`** holds the server, a summary, and each check's status (passed, critical, warning, info, skipped or errored) with its reason and findings. A finding has a subject, severity, message, fix and values. The values are the columns its message uses, in raw form: bytes as integers, durations in seconds, and timestamps in ISO 8601 UTC. `docs/json.md` documents the shape.
 
 ## M0: Placeholder (as soon as possible)
@@ -58,31 +59,32 @@ pgcheckup is a read-only CLI (.NET 10, NativeAOT) that checks a PostgreSQL datab
 
 ## M1: Engine and check catalog
 
-- [ ] Engine: server version and provider detection, and a privilege probe, followed by every applicable check. A check that errors or times out is reported as errored, and the others still run.
-- [ ] Provider detection, tested by simulating each provider's roles and settings in fixtures.
-- [ ] Desk research for the catalog: go through public Postgres postmortems (danluu/post-mortems, engineering blogs) and DBA Stack Exchange, list the failures that recur, and adjust the table below to match. Every check gets at least one **Seen in** link.
+- [x] Engine: server version and provider detection, and a privilege probe, followed by every applicable check. A check that errors or times out is reported as errored, and the others still run.
+- [x] Provider detection, tested by simulating each provider's roles and settings in fixtures.
+- [x] Desk research for the catalog: go through public Postgres postmortems (danluu/post-mortems, engineering blogs) and DBA Stack Exchange, list the failures that recur, and adjust the table below to match. Every check gets at least one **Seen in** link.
 - [ ] The v0.1 checks:
 
 | Check | Catches |
 |---|---|
 | `xid-wraparound` | Databases and tables whose oldest unfrozen transaction ID is nearing the 2.1 billion limit |
 | `multixact-wraparound` | The same for multixact IDs |
-| `long-transaction` | Transactions open longer than the threshold, which hold back vacuum |
-| `idle-in-transaction` | Sessions idle inside an open transaction, and `idle_in_transaction_session_timeout` left unset |
+| `long-transaction` | Transactions open, or idle, longer than the threshold, which hold back vacuum |
+| `idle-transaction-timeout` | `idle_in_transaction_session_timeout` left unset, so an abandoned transaction stays open until someone ends it |
 | `prepared-transaction-orphaned` | Prepared transactions left behind, which hold locks and block vacuum |
-| `replication-slot-inactive` | Slots with no consumer, which keep WAL until the disk fills |
-| `replication-slot-unbounded` | `max_slot_wal_keep_size = -1`, so one stuck slot can keep unlimited WAL |
-| `wal-archiving-failing` | `archive_command` failing since the last success, which breaks point-in-time recovery |
+| `replication-slot-inactive` | Slots with no consumer, which keep WAL until the disk fills, or pin `xmin` and block vacuum |
+| `replication-slot-unbounded` | Slots with no cap on the WAL they keep, so one stuck slot can fill the disk |
+| `wal-archiving-failing` | WAL archiving that fails, hangs or has no command, which breaks point-in-time recovery and keeps WAL |
 | `connection-saturation` | Connections close to `max_connections` minus the reserved slots |
-| `dangerous-settings` | `fsync`, `full_page_writes` or `autovacuum` turned off |
-| `autovacuum-disabled-table` | Tables with `autovacuum_enabled = false` |
-| `integer-exhaustion` | `int4` sequences and identity columns past a share of their range |
+| `dangerous-settings` | `fsync` or `full_page_writes` turned off, or `zero_damaged_pages` turned on |
+| `autovacuum-disabled` | `autovacuum` or `track_counts` turned off, and tables with `autovacuum_enabled = false` |
+| `integer-exhaustion` | `int4` sequences, identity columns and foreign keys past a share of their range |
 | `invalid-index` | Indexes left invalid by a failed `CREATE INDEX CONCURRENTLY`, which slow writes and are never used |
-| `postgres-eol` | Major versions past their end-of-life date |
+| `collation-version-mismatch` | Databases and collations whose version changed under them after an OS upgrade, which breaks text indexes |
+| `postgres-eol` | Major versions past, or close to, their end-of-life date |
 
-- [ ] `pgcheckup explain <check>` prints the check's note. `pgcheckup list` shows every check with its category and minimum version.
-- [ ] `pgcheckup grant` prints SQL for a least-privilege checkup role: `pg_monitor`, `CONNECT`, `default_transaction_read_only = on` for the role, and SELECT on sequences for `integer-exhaustion`.
-- [ ] `--format json` and `--format markdown`. The JSON shape is documented, with `"schema": 1`.
+- [x] `pgcheckup explain <check>` prints the check's note. `pgcheckup list` shows every check with its category and minimum version.
+- [x] `pgcheckup grant` prints SQL for a least-privilege checkup role: `pg_monitor`, `CONNECT`, `default_transaction_read_only = on` for the role, and SELECT on sequences for `integer-exhaustion`.
+- [x] `--format json` and `--format markdown`. The JSON shape is documented, with `"schema": 1`.
 
 **Done when:** every check's fixtures pass on Postgres 14 to 18, and a scan as a role with only `pg_monitor` either runs or skips (with a reason) every check, with no errors.
 
@@ -113,6 +115,7 @@ pgcheckup is a read-only CLI (.NET 10, NativeAOT) that checks a PostgreSQL datab
 - Hosted monitoring (scheduled scans with alerts), then a team dashboard
 - Scanning every database in a cluster in one run
 - Checks based on `pg_stat_statements`
+- `sync-standby-missing`: `synchronous_standby_names` is set, but no synchronous standby is connected, so every commit hangs
 - Scoop, Homebrew and winget packages
 - Signed releases with build provenance
 
