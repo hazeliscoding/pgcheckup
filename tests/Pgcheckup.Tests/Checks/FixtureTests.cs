@@ -38,6 +38,12 @@ public class FixtureTests
         await using var prepared = await PrepareAsync(checkId, fixture);
 
         var findings = await RunAsync(prepared, prepared.Server.Checkup);
+        // PGCHECKUP_TEST_FINDINGS=<file> collects what each fixture renders, for reviewing a check's wording.
+        if (Environment.GetEnvironmentVariable("PGCHECKUP_TEST_FINDINGS") is { Length: > 0 } path)
+        {
+            await File.AppendAllLinesAsync(
+                path, findings.Select(f => $"[{PostgresServer.Version} {fixture}] {f.Severity} {f.CheckId}: {f.Message} | Fix: {f.Fix.Replace('\n', ' ')}"), Cancel);
+        }
 
         if (fixture == "fires")
         {
