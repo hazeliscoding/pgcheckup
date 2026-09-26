@@ -60,11 +60,32 @@ public class CommandLineTests
 
 public class ScanCommandTests(InactiveSlotFixture postgres) : IClassFixture<InactiveSlotFixture>
 {
+    private static readonly CheckDefinition SlotCheck = CheckCatalog.All.Single(c => c.Id == "replication-slot-inactive");
+
+    // Npgsql can't read NaN into a decimal, so this check errors on every run.
+    private static readonly CheckDefinition BrokenCheck = new(
+        "nan-check", "NaN check", "wal", Severity.Critical, 14, [], [], [],
+        "SELECT 'a' AS subject, 'NaN'::numeric AS size",
+        new Template([new ValuePart("size", ValueFormat.Bytes)]),
+        new Template([new TextPart("nothing")]),
+        "");
+
+    // Pinning the checks keeps the summary stable as the catalog grows.
+    private async Task<(int ExitCode, string Output, string Error)> ScanAsync(CheckDefinition[] checks, params string[] options)
+    {
+        var output = new StringWriter { NewLine = "\n" };
+        var error = new StringWriter { NewLine = "\n" };
+        var exitCode = await PgcheckupCli.RunAsync(
+            ["scan", await postgres.CheckupUrlAsync(), .. options], checks, output, error,
+            new Dictionary<string, string?>(), outputRedirected: true, TestContext.Current.CancellationToken);
+        return (exitCode, output.ToString(), error.ToString());
+    }
+
     [Fact]
     public async Task Reports_a_warning_and_exits_0_below_the_default_fail_on()
     {
         var server = await postgres.ServerAsync();
-        var (exitCode, output, error) = await CommandLineTests.RunAsync("scan", await postgres.CheckupUrlAsync());
+        var (exitCode, output, error) = await ScanAsync([SlotCheck]);
 
         Assert.Equal("", error);
         Assert.Equal(0, exitCode);
@@ -76,30 +97,25 @@ public class ScanCommandTests(InactiveSlotFixture postgres) : IClassFixture<Inac
     }
 
     [Fact]
-    public async Task Exits_2_when_a_check_fails_in_a_way_nobody_planned_for()
+    public async Task Exits_1_when_a_finding_reaches_fail_on()
     {
-        // Npgsql can't read NaN into a decimal, so the runner throws something no catch expects.
-        var check = new CheckDefinition(
-            "nan-check", "NaN check", "wal", Severity.Critical, 14, [], [], [],
-            "SELECT 'a' AS subject, 'NaN'::numeric AS size",
-            new Template([new ValuePart("size", ValueFormat.Bytes)]),
-            new Template([new TextPart("nothing")]),
-            "");
-        var output = new StringWriter();
-        var error = new StringWriter();
-
-        var exitCode = await PgcheckupCli.RunAsync(
-            ["scan", await postgres.CheckupUrlAsync()], [check], output, error, new Dictionary<string, string?>(), outputRedirected: true, TestContext.Current.CancellationToken);
-
-        Assert.Equal(2, exitCode);
-        Assert.StartsWith("pgcheckup: ", error.ToString());
+        Assert.Equal(1, (await ScanAsync([SlotCheck], "--fail-on", "warning")).ExitCode);
     }
 
     [Fact]
-    public async Task Exits_1_when_a_finding_reaches_fail_on()
+    public async Task Exits_2_when_a_check_errored_and_no_finding_reached_fail_on()
     {
-        var (exitCode, _, _) = await CommandLineTests.RunAsync("scan", await postgres.CheckupUrlAsync(), "--fail-on", "warning");
+        var (exitCode, output, error) = await ScanAsync([BrokenCheck, SlotCheck]);
 
-        Assert.Equal(1, exitCode);
+        Assert.Equal(2, exitCode);
+        Assert.Equal("", error);
+        Assert.Contains("ERRORED   nan-check", output);
+        Assert.Contains("WARNING   replication-slot-inactive", output);
+    }
+
+    [Fact]
+    public async Task Exits_1_when_a_finding_reaches_fail_on_even_if_a_check_errored()
+    {
+        Assert.Equal(1, (await ScanAsync([BrokenCheck, SlotCheck], "--fail-on", "warning")).ExitCode);
     }
 }

@@ -129,8 +129,11 @@ public static class CheckCompiler
     /// <summary>The allowed values of <c>severity</c>, from most to least severe.</summary>
     public static readonly string[] Severities = ["critical", "warning", "info"];
 
-    /// <summary>The predefined roles a check may list under <c>privileges</c>. All are part of pg_monitor.</summary>
-    public static readonly string[] Privileges = ["pg_monitor", "pg_read_all_settings", "pg_read_all_stats", "pg_stat_scan_tables"];
+    /// <summary>
+    /// What a check may list under <c>privileges</c>: the predefined roles in pg_monitor, and
+    /// <c>select_on_sequences</c> for reading sequence counters.
+    /// </summary>
+    public static readonly string[] Privileges = ["pg_monitor", "pg_read_all_settings", "pg_read_all_stats", "pg_stat_scan_tables", "select_on_sequences"];
 
     /// <summary>The managed providers a check may list under <c>skip_on</c>.</summary>
     public static readonly string[] Providers = ["rds", "aurora", "cloudsql", "azure", "supabase", "neon"];

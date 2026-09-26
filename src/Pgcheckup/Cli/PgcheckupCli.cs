@@ -159,9 +159,9 @@ public static class PgcheckupCli
             {
                 report = await Scanner.ScanAsync(session, host, checks, cancellationToken);
             }
-            catch (Exception problem) when (problem is CheckFailedException or NpgsqlException)
+            catch (NpgsqlException problem)
             {
-                error.WriteLine($"pgcheckup: {problem.Message}");
+                error.WriteLine($"pgcheckup: couldn't read the server's version and privileges: {problem.Message}");
                 return CouldNotRun;
             }
 
@@ -173,7 +173,13 @@ public static class PgcheckupCli
                 "warning" => Severity.Warning,
                 _ => Severity.Critical,
             };
-            return report.Results.Any(r => r.Worst >= threshold) ? FindingsReachedFailOn : Passed;
+            // A finding outranks an error: it is the more useful signal, and an error still fails CI.
+            if (report.Results.Any(r => r.Worst >= threshold))
+            {
+                return FindingsReachedFailOn;
+            }
+
+            return report.Results.Any(r => r.Status == CheckStatus.Errored) ? CouldNotRun : Passed;
         }
     }
 }
