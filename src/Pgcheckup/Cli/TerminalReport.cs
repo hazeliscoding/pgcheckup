@@ -36,15 +36,7 @@ public static class TerminalReport
         output.WriteLine($"pgcheckup · {server.Database} on {server.Host} · PostgreSQL {server.Version}{provider}");
         output.WriteLine();
 
-        var findings = report.Results
-            .SelectMany(r => r.Findings)
-            .Select((finding, order) => (finding, order))
-            .OrderByDescending(f => f.finding.Severity)
-            .ThenBy(f => f.finding.CheckId, StringComparer.Ordinal)
-            .ThenBy(f => f.order)
-            .Select(f => f.finding);
-
-        foreach (var finding in findings)
+        foreach (var finding in ReportText.OrderedFindings(report))
         {
             WriteLabel(output, finding.Severity.ToString().ToUpperInvariant(), SeverityColor(finding.Severity), finding.CheckId, color);
             WriteIndented(output, finding.Message, new string(' ', Indent), new string(' ', Indent));
@@ -52,14 +44,14 @@ public static class TerminalReport
             output.WriteLine();
         }
 
-        foreach (var errored in report.Results.Where(r => r.Status == CheckStatus.Errored).OrderBy(r => r.Check.Id, StringComparer.Ordinal))
+        foreach (var errored in ReportText.Errored(report))
         {
             WriteLabel(output, "ERRORED", ErroredColor, errored.Check.Id, color);
-            WriteIndented(output, Sentence(errored.Reason ?? "it failed"), new string(' ', Indent), new string(' ', Indent));
+            WriteIndented(output, ReportText.Sentence(errored.Reason), new string(' ', Indent), new string(' ', Indent));
             output.WriteLine();
         }
 
-        output.WriteLine(Summary(report));
+        output.WriteLine(ReportText.Summary(report));
     }
 
     private static void WriteLabel(TextWriter output, string label, string colorCode, string checkId, bool color)
@@ -68,9 +60,6 @@ public static class TerminalReport
         output.WriteLine($"{painted}{new string(' ', Indent - label.Length)}{checkId}");
     }
 
-    private static string Sentence(string reason) =>
-        char.ToUpperInvariant(reason[0]) + reason[1..] + (reason.EndsWith('.') ? "" : ".");
-
     private static void WriteIndented(TextWriter output, string text, string first, string rest)
     {
         var lines = text.Split('\n');
@@ -78,42 +67,6 @@ public static class TerminalReport
         {
             output.WriteLine((i == 0 ? first : rest) + lines[i]);
         }
-    }
-
-    private static string Summary(ScanReport report)
-    {
-        var parts = new List<string> { $"{report.Results.Count(r => r.Status == CheckStatus.Passed)} passed" };
-        var critical = report.Results.Count(r => r.Worst == Severity.Critical);
-        var warning = report.Results.Count(r => r.Worst == Severity.Warning);
-        var info = report.Results.Count(r => r.Worst == Severity.Info);
-        if (critical > 0)
-        {
-            parts.Add($"{critical} critical");
-        }
-
-        if (warning > 0)
-        {
-            parts.Add(warning == 1 ? "1 warning" : $"{warning} warnings");
-        }
-
-        if (info > 0)
-        {
-            parts.Add($"{info} info");
-        }
-
-        var errored = report.Results.Count(r => r.Status == CheckStatus.Errored);
-        if (errored > 0)
-        {
-            parts.Add($"{errored} errored");
-        }
-
-        var skipped = report.Results.Where(r => r.Status == CheckStatus.Skipped).ToList();
-        if (skipped.Count > 0)
-        {
-            parts.Add($"{skipped.Count} skipped ({string.Join(", ", skipped.Select(r => $"{r.Check.Id}: {r.Reason}"))})");
-        }
-
-        return string.Join(" · ", parts);
     }
 
     private const string ErroredColor = "1;35";
