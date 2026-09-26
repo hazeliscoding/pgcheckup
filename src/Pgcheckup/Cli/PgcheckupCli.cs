@@ -57,9 +57,39 @@ public static class PgcheckupCli
     {
         var root = new RootCommand("Checks a PostgreSQL database for the problems that cause outages. Read-only, and safe to run on production.");
 
-        var list = new Command("list", "List every check.");
-        list.SetAction(_ => List(checks, output));
+        var list = new Command("list", "List every check with its severity, category and minimum Postgres version.");
+        list.SetAction(_ =>
+        {
+            CatalogText.WriteList(output, checks);
+            return Passed;
+        });
         root.Subcommands.Add(list);
+
+        var checkId = new Argument<string>("check") { Description = "The id of a check, as pgcheckup list shows it." };
+        var explain = new Command("explain", "Explain a check: what breaks, how to fix it, and where it has happened.");
+        explain.Arguments.Add(checkId);
+        explain.SetAction(result => Explain(checks, result.GetValue(checkId)!, output, error));
+        root.Subcommands.Add(explain);
+
+        var role = new Option<string>("--role")
+        {
+            Description = "The role to create.",
+            DefaultValueFactory = _ => "checkup",
+        };
+        var database = new Option<string>("--database")
+        {
+            Description = "The database the role may connect to.",
+            DefaultValueFactory = _ => "app",
+        };
+        var grant = new Command("grant", "Print SQL for a least-privilege checkup role. pgcheckup never runs it.");
+        grant.Options.Add(role);
+        grant.Options.Add(database);
+        grant.SetAction(result =>
+        {
+            output.Write(GrantScript.Build(result.GetValue(role)!, result.GetValue(database)!));
+            return Passed;
+        });
+        root.Subcommands.Add(grant);
 
         var connection = new Argument<string?>("connection")
         {
@@ -108,14 +138,15 @@ public static class PgcheckupCli
         }
     }
 
-    private static int List(IReadOnlyList<CheckDefinition> checks, TextWriter output)
+    private static int Explain(IReadOnlyList<CheckDefinition> checks, string id, TextWriter output, TextWriter error)
     {
-        var width = checks.Max(c => c.Id.Length) + 2;
-        foreach (var check in checks)
+        if (checks.FirstOrDefault(c => c.Id == id) is not { } check)
         {
-            output.WriteLine($"{check.Id.PadRight(width)}{check.Severity.ToString().ToLowerInvariant(),-10}{check.Title}");
+            error.WriteLine($"pgcheckup: there is no check named {id}. Run pgcheckup list to see them.");
+            return CouldNotRun;
         }
 
+        CatalogText.WriteExplanation(output, check);
         return Passed;
     }
 
