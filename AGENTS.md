@@ -24,7 +24,7 @@ The product is only as good as these rules. Never break them, not even in debug 
 
 - **Read-only, always.** A check is one `SELECT` against catalogs and statistics views. No DDL or DML, and no functions with side effects: `pg_terminate_backend`, `pg_cancel_backend`, `pg_reload_conf`, `pg_stat_reset*`, `pg_switch_wal`, `pg_create_*`, `pg_drop_*`, `pg_advisory_*`, `nextval`, `setval`, `set_config`, `txid_current`. Every statement pgcheckup sends runs inside `BEGIN READ ONLY` with `SET LOCAL statement_timeout`, `lock_timeout` and `search_path = pg_catalog, pg_temp`, then rolls back. Never set anything for the whole session, because behind a transaction pooler it reaches the app's connections. Never weaken or bypass these guards.
 - **Fixes are text.** pgcheckup prints fix SQL and never executes it.
-- **Least privilege.** No check needs more than `pg_monitor`. Never require superuser or `rds_superuser`. If the role lacks a privilege, the check is skipped with the reason. It is never an error.
+- **Least privilege.** No check needs more than `pg_monitor`, except `integer-exhaustion`, which needs SELECT on sequences (counters only, never rows). Never require superuser or `rds_superuser`. If the role lacks a privilege, the check is skipped with the reason. It is never an error.
 - **No network beyond the Postgres connection.** No telemetry, update checks, crash reporting or remote lookups. Data such as end-of-life dates ships inside the release.
 - **No secrets or data in output.** Never print or log a password or a full connection string, query text (`pg_stat_activity.query`, `pg_stat_statements.query`), row data or client addresses. Findings name objects, settings, process IDs and durations only.
 - **Placeholders everywhere.** Docs, fixtures, tests and issues use `db.example.com`, `app` and `checkup`, never real hosts or credentials.
@@ -36,10 +36,10 @@ The product is only as good as these rules. Never break them, not even in debug 
 - `check.sql` is one read-only query that returns values, never prose. The wording lives in the `message` and `fix` templates in `check.md`. Thresholds come in as `@name` parameters and are never hard-coded. The search path is `pg_catalog` only, so qualify anything in another schema.
 - Compute ages and durations in SQL from the server's `now()`, not the client's clock.
 - `check.md` has **What breaks**, **Fix** and **Seen in** sections. Every check has at least one **Seen in** link to a public incident or the Postgres docs. Never cite anything a reader can't open.
-- Both fixtures are required. `fires.sql` is the positive control, so a check without one isn't done. A fixture may lower a threshold (`-- threshold name = value`) when the real condition can't be reproduced at scale.
+- Both fixtures are required. `fires.sql` is the positive control, so a check without one isn't done. A fixture may lower a threshold (`-- threshold name = value`) when the real condition can't be reproduced at scale, start Postgres with a setting that needs a restart (`-- server name = value`), and let its next statement fail (`-- expect error`).
 - Check ids are kebab-case and stable, because baselines and ignore lists depend on them. Renaming one is a breaking change that needs a decision in `ROADMAP.md`.
 - Severity: `critical` can take the database down or lose data soon. `warning` is heading there, or removes a safety net. `info` is housekeeping. Don't inflate severity.
-- A check declares its minimum Postgres version and the providers where it is skipped. Every check is tested on every supported version.
+- A check declares its minimum Postgres version, the privileges it needs and the providers where it is skipped. Every check is tested on every supported version, and its `fires` fixture is tested as a role with exactly its declared privileges.
 
 ## .NET and NativeAOT
 

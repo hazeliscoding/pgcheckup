@@ -7,7 +7,7 @@ pgcheckup is a read-only CLI (.NET 10, NativeAOT) that checks a PostgreSQL datab
 - **Name.** The idea started as "Postgres Doctor". `pgdoctor` is already an existing Go project, so this one is pgcheckup. PostgresAI's `postgres-checkup` is unrelated, and the README says so.
 - **Position.** Production readiness for teams without a DBA. It has fewer checks than pg-healthcheck or pgdoctor, and each one maps to a failure that causes outages and is explained in plain words with its fix. It is not a DBA toolkit.
 - **Read-only by construction.** Every statement pgcheckup sends runs in its own transaction: `BEGIN READ ONLY`, `SET LOCAL statement_timeout = '5s'`, `SET LOCAL lock_timeout = '1s'`, `SET LOCAL search_path = pg_catalog, pg_temp`, the query, then `ROLLBACK`. The pinned search path stops a function planted in another schema from shadowing a built-in and running as the scanning role. Only `application_name = pgcheckup` is set for the whole session. Behind a transaction-mode pooler such as PgBouncer, a session-level `SET` would reach the app's next transaction, and the `options` connection parameter is rejected or dropped. The lock timeout stops a scan from queueing behind a migration's lock and then blocking the traffic behind it. pgcheckup prints fixes and never runs them.
-- **Least privilege.** No check needs more than `pg_monitor`. Each check declares what it needs, and if the role doesn't have it, the check is skipped with the reason. `pgcheckup grant` prints the SQL for a checkup role, including `ALTER ROLE … SET default_transaction_read_only = on`, so the role is read-only outside pgcheckup too.
+- **Least privilege.** No check needs more than `pg_monitor`, with one exception decided on 2026-09-26: `integer-exhaustion` (below). Each check declares what it needs, and if the role doesn't have it, the check is skipped with the reason. `pgcheckup grant` prints the SQL for a checkup role, including `ALTER ROLE … SET default_transaction_read_only = on`, so the role is read-only outside pgcheckup too.
 - **SQL only.** pgcheckup talks only to Postgres. Provider settings that SQL can see (such as `rds.force_ssl`) are in scope. Checks that need a cloud API (RDS backups, deletion protection, encryption at rest) are not.
 - **Managed providers.** pgcheckup detects RDS/Aurora, Cloud SQL, Azure Database for PostgreSQL, Supabase and Neon from SQL. A check can list providers where it doesn't apply or can't run, and it shows as skipped there, with the reason.
 - **Checks are SQL plus Markdown**, one folder per check under `checks/<id>/`:
@@ -21,7 +21,7 @@ pgcheckup is a read-only CLI (.NET 10, NativeAOT) that checks a PostgreSQL datab
 - **Postgres versions:** every community-supported major (14 to 18 today), each tested in CI with Testcontainers. When a major reaches end of life, it moves to best effort, and scanning it reports the end of life as a finding.
 - **Fixture tests** give each fixture a fresh Testcontainers Postgres, because slots, prepared transactions and roles belong to the whole server. The fixture's connection stays open until the check has run, so a fixture can hold a transaction open. The check runs through the same code as `scan`, as a role with only `pg_monitor`.
 - **Output:** terminal (default), `--format json` and `--format markdown` in v0.1. The JSON has a `schema` version. The HTML report comes in v0.2.
-- **Exit codes:** 0 when no finding reaches `--fail-on` (default `critical`), 1 when one does, and 2 when the scan couldn't run. Skipped checks never fail a scan.
+- **Exit codes:** 1 when a finding reaches `--fail-on` (default `critical`). Otherwise 2 when the scan couldn't run or any check errored (errors added 2026-09-26), and 0 when neither happened. The report always prints in full. A finding outranks an error because it is the more useful signal, and an error still fails CI. Skipped checks never fail a scan.
 - **Severity:** `critical` can take the database down or lose data soon. `warning` is heading there, or removes a safety net. `info` is housekeeping.
 - **Connection:** a `postgres://` URL, a key-value connection string, or the standard `PG*` environment variables and `.pgpass`. Docs keep passwords off the command line.
 - **What output may contain.** Findings name database objects (tables, slots, roles), settings, process IDs and durations. They never include query text, row data, passwords or client addresses.
@@ -31,6 +31,16 @@ pgcheckup is a read-only CLI (.NET 10, NativeAOT) that checks a PostgreSQL datab
 - **The paid path comes later.** The CLI stays free and complete. A one-time audit report, hosted monitoring and a team dashboard are listed under Later and get built only if public signals show demand. They would be separate code.
 - **Brand** is option 1A, "Scan": stacked layers read by a single probe line. The wordmark is Bricolage Grotesque SemiBold (optical size 34), converted to vector paths, with "pg" in Postgres blue (`#336791`, or `#5B9BD5` on dark). The assets are in `docs/brand/`, with `-dark` files for dark backgrounds.
 - **License:** Apache-2.0.
+
+## Decisions (2026-09-26)
+
+- **`integer-exhaustion` reads sequence counters,** which `pg_monitor` can't see: `pg_sequences.last_value` is NULL and `pg_sequence_last_value()` is denied. The check needs SELECT on sequences, which shows counters but no table rows. It is the one exception to the `pg_monitor` ceiling. Without the grant it is skipped with the reason, and `pgcheckup grant` prints the extra lines.
+- **Provider detection** reads roles and settings: `rds_superuser` for RDS, the `aurora_version()` function for Aurora, `cloudsqlsuperuser` for Cloud SQL, `azure_pg_admin` for Azure, `supabase_admin` for Supabase, and `neon.*` settings for Neon. Fixtures create them to test each one.
+- **Declared privileges are tested.** Each check's `fires` fixture must still fire when run as a role with exactly the privileges the check declares. Without `pg_read_all_stats`, for example, `pg_stat_activity` hides other users' sessions, so a check could pass while seeing nothing.
+- **Fixture directives.** `-- server name = value` starts the fixture's container with that setting, for settings that need a restart (`max_prepared_transactions`, `archive_mode`). `-- expect error` lets the next statement fail, such as a `CREATE INDEX CONCURRENTLY` that leaves an invalid index.
+- **`postgres-eol` is a SQL check.** The end-of-life dates ship in a `VALUES` list in its `check.sql` and are compared with the server's clock, so no client clock is read.
+- **Quiet on stock Postgres.** Stock Postgres ships with `max_slot_wal_keep_size = -1` and no `idle_in_transaction_session_timeout`, and flagging every database for them would teach people to ignore pgcheckup. `replication-slot-unbounded` fires only when a slot exists. An unset timeout is `info`, and sessions idle in a transaction are `warning`.
+- **JSON `schema: 1`** holds the server, a summary, and each check's status (passed, critical, warning, info, skipped or errored) with its reason and findings. A finding has a subject, severity, message, fix and values. The values are the columns its message uses, in raw form: bytes as integers, durations in seconds, and timestamps in ISO 8601 UTC. `docs/json.md` documents the shape.
 
 ## M0: Placeholder (as soon as possible)
 
@@ -71,7 +81,7 @@ pgcheckup is a read-only CLI (.NET 10, NativeAOT) that checks a PostgreSQL datab
 | `postgres-eol` | Major versions past their end-of-life date |
 
 - [ ] `pgcheckup explain <check>` prints the check's note. `pgcheckup list` shows every check with its category and minimum version.
-- [ ] `pgcheckup grant` prints SQL for a least-privilege checkup role: `pg_monitor`, `CONNECT`, and `default_transaction_read_only = on` for the role.
+- [ ] `pgcheckup grant` prints SQL for a least-privilege checkup role: `pg_monitor`, `CONNECT`, `default_transaction_read_only = on` for the role, and SELECT on sequences for `integer-exhaustion`.
 - [ ] `--format json` and `--format markdown`. The JSON shape is documented, with `"schema": 1`.
 
 **Done when:** every check's fixtures pass on Postgres 14 to 18, and a scan as a role with only `pg_monitor` either runs or skips (with a reason) every check, with no errors.
