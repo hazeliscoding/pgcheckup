@@ -1,3 +1,4 @@
+using DotNet.Testcontainers.Configurations;
 using Npgsql;
 using Testcontainers.PostgreSql;
 
@@ -23,9 +24,18 @@ public sealed class PostgresServer : IAsyncDisposable
         Password = "checkup",
     };
 
-    public static async Task<PostgresServer> StartAsync(CancellationToken cancellationToken)
+    public static Task<PostgresServer> StartAsync(CancellationToken cancellationToken) =>
+        StartAsync(new Dictionary<string, string>(), cancellationToken);
+
+    // Replaces Testcontainers' default command, which turns fsync, full_page_writes and
+    // synchronous_commit off, so fixtures run on stock Postgres plus what they ask for.
+    public static async Task<PostgresServer> StartAsync(IReadOnlyDictionary<string, string> settings, CancellationToken cancellationToken)
     {
-        var container = new PostgreSqlBuilder($"postgres:{Version}-alpine").WithDatabase("app").Build();
+        var command = settings.SelectMany(s => new[] { "-c", $"{s.Key}={s.Value}" }).ToArray();
+        var container = new PostgreSqlBuilder($"postgres:{Version}-alpine")
+            .WithDatabase("app")
+            .WithCommand(new OverwriteEnumerable<string>(command))
+            .Build();
         await container.StartAsync(cancellationToken);
         var server = new PostgresServer(container);
         await server.ExecuteAsSuperuserAsync(cancellationToken, "CREATE ROLE checkup LOGIN PASSWORD 'checkup' IN ROLE pg_monitor");
