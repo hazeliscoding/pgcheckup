@@ -13,7 +13,7 @@ These are the working rules for agents in this repo. pgcheckup is a read-only CL
 Keep commands cross-platform (`dotnet`, `docker`), because the owner develops on Windows. Avoid bash-only scripts.
 
 - Build: `dotnet build pgcheckup.slnx`. A broken check folder fails the build with its file and line.
-- Test: `dotnet test --project tests/Pgcheckup.Tests`. It needs Docker, and uses Postgres 18 unless `PGCHECKUP_TEST_POSTGRES` names another major (14 to 17). CI runs all five.
+- Test: `dotnet test --project tests/Pgcheckup.Tests`. It needs Docker, and uses Postgres 18 unless `PGCHECKUP_TEST_POSTGRES` names another major (14 to 17). CI runs all five. `PGCHECKUP_TEST_CHECK=<id>` runs only that check's fixtures, which is quicker while writing a check.
 - Publish: `dotnet publish src/Pgcheckup -c Release -r win-x64 -o out` (`linux-x64` on Linux). Trim and AOT warnings fail it.
 - Test the published binary: set `PGCHECKUP_BINARY` to it, then run `dotnet test --project tests/Pgcheckup.Tests -- --filter-class Pgcheckup.Tests.Cli.NativeBinaryTests`.
 - NativeAOT publish on this Windows machine fails with `'vswhere.exe' is not recognized` unless the VS Installer folder is on PATH. Run it as `$env:PATH = "C:\Program Files (x86)\Microsoft Visual Studio\Installer;$env:PATH"; dotnet publish …`. That is an environment problem, not an AOT warning.
