@@ -42,6 +42,14 @@ public sealed class Template(IReadOnlyList<TemplatePart> parts)
     /// <summary>The template's parts in order.</summary>
     public IReadOnlyList<TemplatePart> Parts { get; } = parts;
 
+    /// <summary>The columns the template uses, in order of first use, including those inside sections.</summary>
+    public IReadOnlyList<string> ValueNames { get; } = parts
+        .SelectMany(p => p is SectionPart section ? section.Parts : [p])
+        .OfType<ValuePart>()
+        .Select(v => v.Name)
+        .Distinct(StringComparer.Ordinal)
+        .ToList();
+
     /// <summary>Renders the template with one row of the check's query.</summary>
     /// <param name="values">The row, by column name. SQL NULL is <see langword="null"/>.</param>
     /// <returns>The text, with each section left out when a value in it is NULL.</returns>
