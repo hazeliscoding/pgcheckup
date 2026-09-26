@@ -22,17 +22,18 @@ public static class TerminalReport
         && !(environment.TryGetValue("TERM", out var term) && term == "dumb");
 
     /// <summary>
-    /// Writes the header, then each finding with its fix, then a summary that counts each check
-    /// once at its worst severity.
+    /// Writes the header, then each finding with its fix, then each errored check, then a
+    /// summary that counts each check once at its worst severity and names skipped checks.
     /// </summary>
     /// <param name="output">Where to write.</param>
     /// <param name="report">What the scan found.</param>
-    /// <param name="color">Whether to color the severity words. The words are always there.</param>
+    /// <param name="color">Whether to color the status words. The words are always there.</param>
     /// <remarks>Findings are ordered by severity, most severe first, then by check id.</remarks>
     public static void Write(TextWriter output, ScanReport report, bool color)
     {
         var server = report.Server;
-        output.WriteLine($"pgcheckup · {server.Database} on {server.Host} · PostgreSQL {server.Version}");
+        var provider = server.Provider is { } managed ? $" · {managed.Name}" : "";
+        output.WriteLine($"pgcheckup · {server.Database} on {server.Host} · PostgreSQL {server.Version}{provider}");
         output.WriteLine();
 
         var findings = report.Results
@@ -45,15 +46,30 @@ public static class TerminalReport
 
         foreach (var finding in findings)
         {
-            var label = finding.Severity.ToString().ToUpperInvariant();
-            output.WriteLine($"{Paint(label, finding.Severity, color)}{new string(' ', Indent - label.Length)}{finding.CheckId}");
+            WriteLabel(output, finding.Severity.ToString().ToUpperInvariant(), SeverityColor(finding.Severity), finding.CheckId, color);
             WriteIndented(output, finding.Message, new string(' ', Indent), new string(' ', Indent));
             WriteIndented(output, finding.Fix, new string(' ', Indent) + FixLabel, new string(' ', Indent + FixLabel.Length));
             output.WriteLine();
         }
 
+        foreach (var errored in report.Results.Where(r => r.Status == CheckStatus.Errored).OrderBy(r => r.Check.Id, StringComparer.Ordinal))
+        {
+            WriteLabel(output, "ERRORED", ErroredColor, errored.Check.Id, color);
+            WriteIndented(output, Sentence(errored.Reason ?? "it failed"), new string(' ', Indent), new string(' ', Indent));
+            output.WriteLine();
+        }
+
         output.WriteLine(Summary(report));
     }
+
+    private static void WriteLabel(TextWriter output, string label, string colorCode, string checkId, bool color)
+    {
+        var painted = color ? $"\u001b[{colorCode}m{label}\u001b[0m" : label;
+        output.WriteLine($"{painted}{new string(' ', Indent - label.Length)}{checkId}");
+    }
+
+    private static string Sentence(string reason) =>
+        char.ToUpperInvariant(reason[0]) + reason[1..] + (reason.EndsWith('.') ? "" : ".");
 
     private static void WriteIndented(TextWriter output, string text, string first, string rest)
     {
@@ -66,7 +82,7 @@ public static class TerminalReport
 
     private static string Summary(ScanReport report)
     {
-        var parts = new List<string> { $"{report.Results.Count(r => r.Worst == null)} passed" };
+        var parts = new List<string> { $"{report.Results.Count(r => r.Status == CheckStatus.Passed)} passed" };
         var critical = report.Results.Count(r => r.Worst == Severity.Critical);
         var warning = report.Results.Count(r => r.Worst == Severity.Warning);
         var info = report.Results.Count(r => r.Worst == Severity.Info);
@@ -85,22 +101,27 @@ public static class TerminalReport
             parts.Add($"{info} info");
         }
 
+        var errored = report.Results.Count(r => r.Status == CheckStatus.Errored);
+        if (errored > 0)
+        {
+            parts.Add($"{errored} errored");
+        }
+
+        var skipped = report.Results.Where(r => r.Status == CheckStatus.Skipped).ToList();
+        if (skipped.Count > 0)
+        {
+            parts.Add($"{skipped.Count} skipped ({string.Join(", ", skipped.Select(r => $"{r.Check.Id}: {r.Reason}"))})");
+        }
+
         return string.Join(" · ", parts);
     }
 
-    private static string Paint(string label, Severity severity, bool color)
-    {
-        if (!color)
-        {
-            return label;
-        }
+    private const string ErroredColor = "1;35";
 
-        var code = severity switch
-        {
-            Severity.Critical => "1;31",
-            Severity.Warning => "1;33",
-            _ => "1;34",
-        };
-        return $"\u001b[{code}m{label}\u001b[0m";
-    }
+    private static string SeverityColor(Severity severity) => severity switch
+    {
+        Severity.Critical => "1;31",
+        Severity.Warning => "1;33",
+        _ => "1;34",
+    };
 }
