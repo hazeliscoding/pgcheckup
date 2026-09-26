@@ -5,7 +5,19 @@ namespace Pgcheckup.Engine;
 /// <summary>A managed Postgres service, detected from SQL.</summary>
 /// <param name="Id">The id that check.md lists under <c>skip_on</c>, such as <c>rds</c>.</param>
 /// <param name="Name">The name the report prints, such as "Amazon RDS".</param>
-public sealed record Provider(string Id, string Name);
+public sealed record Provider(string Id, string Name)
+{
+    /// <summary>Every provider pgcheckup detects, in detection order.</summary>
+    public static IReadOnlyList<Provider> Known { get; } =
+    [
+        new("aurora", "Amazon Aurora"),
+        new("rds", "Amazon RDS"),
+        new("cloudsql", "Google Cloud SQL"),
+        new("azure", "Azure Database for PostgreSQL"),
+        new("supabase", "Supabase"),
+        new("neon", "Neon"),
+    ];
+}
 
 /// <summary>What pgcheckup knows about the server before any check runs.</summary>
 /// <param name="Database">The database scanned.</param>
@@ -23,17 +35,6 @@ public sealed record ServerContext(
     Provider? Provider,
     IReadOnlySet<string> Privileges)
 {
-    // Aurora first: it also has rds_superuser.
-    private static readonly (string Column, Provider Provider)[] Providers =
-    [
-        ("aurora", new("aurora", "Amazon Aurora")),
-        ("rds", new("rds", "Amazon RDS")),
-        ("cloudsql", new("cloudsql", "Google Cloud SQL")),
-        ("azure", new("azure", "Azure Database for PostgreSQL")),
-        ("supabase", new("supabase", "Supabase")),
-        ("neon", new("neon", "Neon")),
-    ];
-
     private static readonly string[] PrivilegeColumns =
         ["pg_monitor", "pg_read_all_settings", "pg_read_all_stats", "pg_stat_scan_tables", "select_on_sequences"];
 
@@ -79,7 +80,8 @@ public sealed record ServerContext(
             (string)row["database"]!,
             host,
             (int)row["version"]!,
-            Providers.FirstOrDefault(p => (bool)row[p.Column]!).Provider,
+            // Aurora comes first in Provider.Known because it also has rds_superuser.
+            Provider.Known.FirstOrDefault(p => (bool)row[p.Id]!),
             PrivilegeColumns.Where(p => (bool)row[p]!).ToHashSet(StringComparer.Ordinal));
     }
 }
