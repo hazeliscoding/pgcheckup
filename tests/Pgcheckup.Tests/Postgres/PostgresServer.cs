@@ -32,7 +32,8 @@ public sealed class PostgresServer : IAsyncDisposable
     public static async Task<PostgresServer> StartAsync(IReadOnlyDictionary<string, string> settings, CancellationToken cancellationToken)
     {
         var command = settings.SelectMany(s => new[] { "-c", $"{s.Key}={s.Value}" }).ToArray();
-        var container = new PostgreSqlBuilder($"postgres:{Version}-alpine")
+        // Debian, not Alpine: most servers run glibc, whose collation versions a check compares.
+        var container = new PostgreSqlBuilder($"postgres:{Version}")
             .WithDatabase("app")
             .WithCommand(new OverwriteEnumerable<string>(command))
             .Build();

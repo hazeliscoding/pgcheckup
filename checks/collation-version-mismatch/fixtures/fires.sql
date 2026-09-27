@@ -4,3 +4,5 @@ CREATE COLLATION fixture_collation (provider = icu, locale = 'en-US');
 CREATE TABLE fixture_names (name text COLLATE fixture_collation);
 CREATE INDEX fixture_names_name ON fixture_names (name);
 UPDATE pg_collation SET collversion = '1.0' WHERE collname = 'fixture_collation';
+-- The same for the database's default collation, from glibc.
+UPDATE pg_database SET datcollversion = '1.0' WHERE datname = 'app';
