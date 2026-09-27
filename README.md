@@ -11,7 +11,7 @@ In February 2019, one of the Postgres shards behind Mailchimp's Mandrill [ran ou
 
 Most of these failures show up in the system catalogs weeks ahead: a table's transaction ID age, a replication slot nobody reads, WAL archiving that failed last night. Teams without a DBA rarely look. pgcheckup looks for them and tells you what to do.
 
-> **Status:** early development. The first check, `replication-slot-inactive`, runs end to end. There is no release to install yet. See [ROADMAP.md](ROADMAP.md).
+> **Status:** early development. The 15 checks of v0.1 run end to end, but there is no release to install yet. See [ROADMAP.md](ROADMAP.md).
 
 ![pgcheckup scanning a database whose inactive replication slot is holding 1.07 GB of WAL](docs/scan.gif)
 
@@ -26,24 +26,30 @@ pgcheckup scan "postgres://checkup@db.example.com:5432/app?sslmode=verify-full"
 pgcheckup · app on db.example.com · PostgreSQL 17.6 · Amazon RDS
 
 CRITICAL  xid-wraparound
-          Table orders has used 1.61 billion of its 2.1 billion transaction IDs.
-          Vacuum can't freeze it while pid 4127 holds a transaction open (6 days).
-          Fix: end pid 4127, then run VACUUM (FREEZE) orders;
+          Table public.orders has used 1.61 billion of its 2.1 billion transaction IDs.
+          Fix: VACUUM (FREEZE, VERBOSE) public.orders;
+
+WARNING   long-transaction
+          Session 4127 (worker on app) has had a transaction open for 6 days and has been idle in it for 6 days.
+          Fix: if the session is stuck or abandoned, end it:
+               SELECT pg_terminate_backend(4127);
 
 WARNING   replication-slot-inactive
           Slot debezium has been inactive for 3 days and is holding 48 GB of WAL.
           Fix: restart its consumer, or drop the slot:
                SELECT pg_drop_replication_slot('debezium');
 
-11 passed · 1 critical · 1 warning · 1 skipped (wal-archiving-failing: managed by Amazon RDS)
+11 passed · 1 critical · 2 warnings · 1 skipped (wal-archiving-failing: managed by Amazon RDS)
 ```
 
 ## What it checks
 
-- **Running out of IDs:** transaction ID and multixact wraparound, and `int4` sequences and identity columns near their limit.
-- **Cleanup that can't run:** long transactions, sessions idle inside a transaction, forgotten prepared transactions, and tables with autovacuum turned off.
-- **Disks filling with WAL:** inactive replication slots, slots with no WAL limit, and failing WAL archiving.
-- **Capacity and settings:** connection saturation, `fsync`, `full_page_writes` or `autovacuum` turned off, invalid indexes, and Postgres versions past end of life.
+- **Running out of IDs:** transaction ID and multixact wraparound, and `int4` sequences, identity columns and foreign keys near their limit.
+- **Cleanup that can't run:** long transactions and sessions idle inside one, forgotten prepared transactions, no timeout for idle transactions, and autovacuum turned off.
+- **Disks filling with WAL:** inactive replication slots, slots with no WAL limit, and WAL archiving that fails or hangs.
+- **Capacity and settings:** connection saturation, `fsync` or `full_page_writes` turned off, invalid indexes, collations changed by an OS upgrade, and Postgres versions near or past end of life.
+
+`pgcheckup list` shows every check.
 
 Every finding says what breaks and how to fix it. `pgcheckup explain <check>` prints the full note, with links to incidents where it happened.
 
@@ -57,7 +63,7 @@ Every finding says what breaks and how to fix it. `pgcheckup explain <check>` pr
 
 ## In CI
 
-`pgcheckup scan` exits 0 when no finding reaches `--fail-on` (default `critical`), 1 when one does, and 2 when the scan couldn't run. `--format json` and `--format markdown` are there for pipelines and pull requests. A baseline, so CI fails only on new findings, comes with v0.2.
+`pgcheckup scan` exits 1 when a finding reaches `--fail-on` (default `critical`), otherwise 2 when the scan couldn't run or a check errored, and 0 when neither happened. `--format json` ([its shape](docs/json.md)) and `--format markdown` are there for pipelines and pull requests. A baseline, so CI fails only on new findings, comes with v0.2.
 
 ## Prior art
 
