@@ -25,13 +25,13 @@
           "severity": "warning",
           "message": "Slot debezium has been inactive for 3 days and is holding 48 GB of WAL.",
           "fix": "restart its consumer, or drop the slot:\nSELECT pg_drop_replication_slot('debezium');",
-          "values": { "subject": "debezium", "inactive_for": 259200, "retained_wal": 51539607552 }
+          "values": { "subject": "debezium", "inactive_for": 259200, "retained_wal": 51539607552, "xmin_age": null }
         }
       ]
     },
     {
       "id": "wal-archiving-failing",
-      "title": "Failing WAL archiving",
+      "title": "WAL archiving failing",
       "category": "wal",
       "status": "skipped",
       "reason": "managed by Amazon RDS",
@@ -57,4 +57,4 @@
 | `checks[].findings[].subject` | The object the finding is about, such as a slot or table name. |
 | `checks[].findings[].severity` | `critical`, `warning` or `info`. |
 | `checks[].findings[].message`, `.fix` | The text the terminal report prints. pgcheckup never runs the fix. |
-| `checks[].findings[].values` | The facts behind the message, one per column it uses: sizes and counts as numbers, durations in seconds, timestamps as ISO 8601 UTC strings. The names differ per check. |
+| `checks[].findings[].values` | The facts behind the message, one per column it uses: sizes and counts as numbers, durations in seconds, timestamps as ISO 8601 UTC strings. A value the message left out, because it was NULL, is `null`. The names differ per check. |
