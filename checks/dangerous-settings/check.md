@@ -5,6 +5,7 @@ category: capacity
 severity: critical
 min_version: 14
 privileges: []
+skip_on: [neon]
 message: "{subject} is {setting}. Postgres then can't protect your data from a crash or a damaged page."
 fix: |
   turn it back:
@@ -21,6 +22,8 @@ Three settings trade Postgres's protection of your data for speed or convenience
 - `zero_damaged_pages = on`: Postgres silently replaces damaged pages with empty ones, which destroys the rows in them. It is meant for a one-off rescue, never for normal running.
 
 They are sometimes turned off to speed up a bulk load or a test server, and left that way.
+
+Neon runs with `fsync = off` by design, because its storage layer makes writes durable, so the check is skipped there.
 
 ## Fix
 
