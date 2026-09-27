@@ -26,14 +26,20 @@ public static partial class GrantScript
     /// <summary>Builds the SQL. It is printed for a person to review and run, never run by pgcheckup.</summary>
     /// <param name="role">The role to create, quoted when the name needs it.</param>
     /// <param name="database">The database the role may connect to, quoted when the name needs it.</param>
+    /// <param name="owner">
+    /// The role that owns the application's tables. Default privileges only cover sequences that
+    /// this role creates later.
+    /// </param>
     /// <returns>
     /// SQL that creates the role with <c>pg_monitor</c>, <c>CONNECT</c> and a read-only default, then
     /// the sequence grants that only <c>integer-exhaustion</c> needs.
     /// </returns>
-    public static string Build(string role, string database)
+    /// <exception cref="ArgumentException">A name contains a control character.</exception>
+    public static string Build(string role, string database, string owner)
     {
         var r = Identifier(role);
         var d = Identifier(database);
+        var o = Identifier(owner);
         var sql = new StringBuilder();
         sql.Append("-- A least-privilege role for pgcheckup. Review it, then run it as a superuser\n");
         sql.Append("-- (rds_superuser on Amazon RDS, cloudsqlsuperuser on Cloud SQL).\n");
@@ -45,14 +51,18 @@ public static partial class GrantScript
         sql.Append($"ALTER ROLE {r} SET default_transaction_read_only = on;\n");
         sql.Append('\n');
         sql.Append("-- Only integer-exhaustion needs these. They show sequence counters, never table rows.\n");
-        sql.Append("-- Repeat them for each schema with sequences, as the role that creates them.\n");
+        sql.Append($"-- Repeat them for each schema with sequences. The second covers sequences that {o},\n");
+        sql.Append("-- the role that owns your tables, creates later; name another with --owner.\n");
         sql.Append($"GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO {r};\n");
-        sql.Append($"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON SEQUENCES TO {r};\n");
+        sql.Append($"ALTER DEFAULT PRIVILEGES FOR ROLE {o} IN SCHEMA public GRANT SELECT ON SEQUENCES TO {r};\n");
         return sql.ToString();
     }
 
+    // A line break in a name would end the -- comment it appears in, and run the rest as SQL.
     private static string Identifier(string name) =>
-        PlainIdentifier().IsMatch(name) && !Reserved.Contains(name) ? name : $"\"{name.Replace("\"", "\"\"")}\"";
+        name.Any(char.IsControl) ? throw new ArgumentException("A role or database name can't contain control characters.")
+        : PlainIdentifier().IsMatch(name) && !Reserved.Contains(name) ? name
+        : $"\"{name.Replace("\"", "\"\"")}\"";
 
     [GeneratedRegex("^[a-z_][a-z0-9_$]*$")]
     private static partial Regex PlainIdentifier();

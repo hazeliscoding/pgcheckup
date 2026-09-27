@@ -85,13 +85,27 @@ public static class PgcheckupCli
             Description = "The database the role may connect to.",
             DefaultValueFactory = _ => "app",
         };
+        var owner = new Option<string>("--owner")
+        {
+            Description = "The role that owns your tables, so the grant covers sequences it creates later.",
+            DefaultValueFactory = _ => "app",
+        };
         var grant = new Command("grant", "Print SQL for a least-privilege checkup role. pgcheckup never runs it.");
         grant.Options.Add(role);
         grant.Options.Add(database);
+        grant.Options.Add(owner);
         grant.SetAction(result =>
         {
-            output.Write(GrantScript.Build(result.GetValue(role)!, result.GetValue(database)!));
-            return Passed;
+            try
+            {
+                output.Write(GrantScript.Build(result.GetValue(role)!, result.GetValue(database)!, result.GetValue(owner)!));
+                return Passed;
+            }
+            catch (ArgumentException problem)
+            {
+                error.WriteLine($"pgcheckup: {problem.Message}");
+                return CouldNotRun;
+            }
         });
         root.Subcommands.Add(grant);
 

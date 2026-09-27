@@ -88,6 +88,27 @@ public class CatalogCommandTests
     }
 
     [Fact]
+    public async Task Grants_to_the_role_and_owner_given()
+    {
+        var (exitCode, output, _) = await RunAsync("grant", "--role", "scanner", "--database", "shop", "--owner", "shop_owner");
+
+        Assert.Equal(0, exitCode);
+        Assert.Contains("CREATE ROLE scanner LOGIN;", output);
+        Assert.Contains("GRANT CONNECT ON DATABASE shop TO scanner;", output);
+        Assert.Contains("ALTER DEFAULT PRIVILEGES FOR ROLE shop_owner IN SCHEMA public", output);
+    }
+
+    [Fact]
+    public async Task Exits_2_when_grant_is_given_a_name_with_a_line_break()
+    {
+        var (exitCode, output, error) = await RunAsync("grant", "--role", "scanner\nDROP TABLE orders;");
+
+        Assert.Equal(2, exitCode);
+        Assert.Equal("", output);
+        Assert.Contains("control characters", error);
+    }
+
+    [Fact]
     public async Task Exits_2_for_a_check_that_does_not_exist()
     {
         var (exitCode, _, error) = await RunAsync("explain", "no-such-check");
