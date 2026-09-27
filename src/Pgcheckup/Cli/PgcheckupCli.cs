@@ -163,6 +163,19 @@ public static class PgcheckupCli
         }
     }
 
+    // Files and pipes get unwrapped lines; so does a console whose width can't be read.
+    private static int? TerminalWidth()
+    {
+        try
+        {
+            return Console.WindowWidth > 0 ? Console.WindowWidth : null;
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+    }
+
     private static int Explain(IReadOnlyList<CheckDefinition> checks, string id, TextWriter output, TextWriter error)
     {
         if (checks.FirstOrDefault(c => c.Id == id) is not { } check)
@@ -231,7 +244,7 @@ public static class PgcheckupCli
                     output.Write(MarkdownReport.Write(report));
                     break;
                 default:
-                    TerminalReport.Write(output, report, TerminalReport.UseColor(outputRedirected, environment));
+                    TerminalReport.Write(output, report, TerminalReport.UseColor(outputRedirected, environment), outputRedirected ? null : TerminalWidth());
                     break;
             }
 

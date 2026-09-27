@@ -1,3 +1,4 @@
+using System.Text;
 using Pgcheckup.Checks;
 using Pgcheckup.Engine;
 
@@ -28,8 +29,12 @@ public static class TerminalReport
     /// <param name="output">Where to write.</param>
     /// <param name="report">What the scan found.</param>
     /// <param name="color">Whether to color the status words. The words are always there.</param>
+    /// <param name="width">
+    /// The terminal's width, to wrap messages at, or <see langword="null"/> not to wrap. Fixes are
+    /// never wrapped: they are SQL to copy, and a line break inside a quoted name would change it.
+    /// </param>
     /// <remarks>Findings are ordered by severity, most severe first, then by check id.</remarks>
-    public static void Write(TextWriter output, ScanReport report, bool color)
+    public static void Write(TextWriter output, ScanReport report, bool color, int? width = null)
     {
         var server = report.Server;
         var provider = server.Provider is { } managed ? $" · {managed.Name}" : "";
@@ -39,15 +44,15 @@ public static class TerminalReport
         foreach (var finding in ReportText.OrderedFindings(report))
         {
             WriteLabel(output, finding.Severity.ToString().ToUpperInvariant(), SeverityColor(finding.Severity), finding.CheckId, color);
-            WriteIndented(output, finding.Message, new string(' ', Indent), new string(' ', Indent));
-            WriteIndented(output, finding.Fix, new string(' ', Indent) + FixLabel, new string(' ', Indent + FixLabel.Length));
+            WriteIndented(output, finding.Message, new string(' ', Indent), new string(' ', Indent), width);
+            WriteIndented(output, finding.Fix, new string(' ', Indent) + FixLabel, new string(' ', Indent + FixLabel.Length), null);
             output.WriteLine();
         }
 
         foreach (var errored in ReportText.Errored(report))
         {
             WriteLabel(output, "ERRORED", ErroredColor, errored.Check.Id, color);
-            WriteIndented(output, ReportText.Sentence(errored.Reason), new string(' ', Indent), new string(' ', Indent));
+            WriteIndented(output, ReportText.Sentence(errored.Reason), new string(' ', Indent), new string(' ', Indent), width);
             output.WriteLine();
         }
 
@@ -60,13 +65,43 @@ public static class TerminalReport
         output.WriteLine($"{painted}{new string(' ', Indent - label.Length)}{checkId}");
     }
 
-    private static void WriteIndented(TextWriter output, string text, string first, string rest)
+    private static void WriteIndented(TextWriter output, string text, string first, string rest, int? width)
     {
-        var lines = text.Split('\n');
-        for (var i = 0; i < lines.Length; i++)
+        var lines = text.Split('\n').SelectMany(line => width is { } w ? Wrap(line, w - rest.Length) : [line]).ToList();
+        for (var i = 0; i < lines.Count; i++)
         {
             output.WriteLine((i == 0 ? first : rest) + lines[i]);
         }
+    }
+
+    // Breaks at spaces. A word longer than the line stays whole, and a very narrow terminal gets
+    // no wrapping rather than a column of single words.
+    private static IEnumerable<string> Wrap(string line, int available)
+    {
+        if (available < 20 || line.Length <= available)
+        {
+            yield return line;
+            yield break;
+        }
+
+        var current = new StringBuilder();
+        foreach (var word in line.Split(' '))
+        {
+            if (current.Length > 0 && current.Length + 1 + word.Length > available)
+            {
+                yield return current.ToString();
+                current.Clear();
+            }
+
+            if (current.Length > 0)
+            {
+                current.Append(' ');
+            }
+
+            current.Append(word);
+        }
+
+        yield return current.ToString();
     }
 
     private const string ErroredColor = "1;35";

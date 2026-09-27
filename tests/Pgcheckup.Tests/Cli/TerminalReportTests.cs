@@ -18,11 +18,33 @@ public class TerminalReportTests
 
     private static CheckResult Found(string id, params Finding[] findings) => new(Check(id), CheckStatus.Found, findings);
 
-    private static string Render(ScanReport report, bool color = false)
+    private static string Render(ScanReport report, bool color = false, int? width = null)
     {
         var output = new StringWriter { NewLine = "\n" };
-        TerminalReport.Write(output, report, color);
+        TerminalReport.Write(output, report, color, width);
         return output.ToString();
+    }
+
+    [Fact]
+    public void Wraps_messages_to_the_terminal_width_but_never_the_fix()
+    {
+        var report = new ScanReport(Server,
+        [
+            Found("replication-slot-unbounded", Finding("replication-slot-unbounded", Severity.Warning,
+                "max_slot_wal_keep_size is -1 and this server has replication slots, so one stuck slot can keep WAL until the disk fills.",
+                "cap it below the free space on the WAL disk:\nALTER SYSTEM SET max_slot_wal_keep_size = '50GB'; SELECT pg_reload_conf();")),
+        ]);
+
+        Assert.Contains(
+            """
+            WARNING   replication-slot-unbounded
+                      max_slot_wal_keep_size is -1 and this server has replication
+                      slots, so one stuck slot can keep WAL until the disk fills.
+                      Fix: cap it below the free space on the WAL disk:
+                           ALTER SYSTEM SET max_slot_wal_keep_size = '50GB'; SELECT pg_reload_conf();
+
+            """.ReplaceLineEndings("\n"),
+            Render(report, width: 72));
     }
 
     [Fact]
