@@ -19,7 +19,9 @@ An `integer` column holds values up to about 2.1 billion (`smallint`, 32,767). W
 Three shapes lead there:
 
 - A `serial` or identity column declared `integer`, often from before anyone expected the table to grow.
-- A sequence declared `AS integer` on its own.
+- A sequence declared `AS integer` on its own, or left `integer` when its column was changed to `bigint`.
+
+Sequences with `CYCLE` start over by design, so the check ignores them.
 - An `integer` foreign key that points at a `bigint` key. The key is fine, but once its values pass 2.1 billion, no row can reference them.
 
 Reading sequence counters needs SELECT on the sequences, which shows counters but no table rows. `pgcheckup grant` prints that grant. Without it, the check is skipped.

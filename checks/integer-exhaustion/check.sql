@@ -7,6 +7,8 @@ WITH sequences AS (
     JOIN pg_class AS c ON c.oid = s.seqrelid
     JOIN pg_namespace AS n ON n.oid = c.relnamespace
     WHERE s.seqincrement > 0
+      -- A cycling sequence starts over at its minimum by design.
+      AND NOT s.seqcycle
       -- Another session's temporary sequence can't be read.
       AND c.relpersistence <> 't'
 ),
@@ -40,7 +42,9 @@ fed AS (
            least(s.seqmax, coalesce(col.type_max, s.seqmax)) AS capacity
     FROM sequences AS s
     LEFT JOIN feeds AS f ON f.seqrelid = s.seqrelid
-    LEFT JOIN columns AS col ON col.attrelid = f.table_oid AND col.attnum = f.attnum
+    -- The column is the limit only if it is no wider than its sequence. A bigint column fed by an
+    -- integer sequence (left behind by ALTER COLUMN TYPE bigint) needs the sequence changed, not the table.
+    LEFT JOIN columns AS col ON col.attrelid = f.table_oid AND col.attnum = f.attnum AND col.type_max <= s.seqmax
 )
 -- Sequences, measured against the column they feed, or their own maximum.
 SELECT coalesce(fed.column_name, fed.sequence_name) AS subject,
@@ -67,7 +71,7 @@ SELECT fk.column_name,
        fk.attribute,
        NULL,
        fk.column_name,
-       fed.column_name,
+       target.column_name,
        fed.last_value,
        fk.type_max
 FROM pg_constraint AS k
