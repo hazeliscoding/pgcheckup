@@ -17,7 +17,7 @@ public static class MarkdownReport
     {
         var server = report.Server;
         var markdown = new StringBuilder();
-        Line(markdown, $"## pgcheckup · {server.Database} on {server.Host}");
+        Line(markdown, $"## pgcheckup · {Cell(ValueText.Printable(server.Database))} on {Cell(ValueText.Printable(server.Host))}");
         Line(markdown);
         var provider = server.Provider is { } managed ? $" · {managed.Name}" : "";
         Line(markdown, $"PostgreSQL {server.Version}{provider} · {ReportText.Summary(report)}");
@@ -50,11 +50,14 @@ public static class MarkdownReport
             foreach (var finding in findings)
             {
                 Line(markdown);
-                Line(markdown, $"**`{finding.CheckId}`** · {Cell(finding.Subject)}");
+                Line(markdown, $"**`{finding.CheckId}`** · {Cell(ValueText.Printable(finding.Subject))}");
                 Line(markdown);
-                Line(markdown, "```");
+
+                // A fence longer than any run of backticks in the fix, so an object name can't close it.
+                var fence = new string('`', Math.Max(3, LongestBacktickRun(finding.Fix) + 1));
+                Line(markdown, fence);
                 Line(markdown, finding.Fix);
-                Line(markdown, "```");
+                Line(markdown, fence);
             }
         }
 
@@ -65,4 +68,16 @@ public static class MarkdownReport
     private static void Line(StringBuilder markdown, string text = "") => markdown.Append(text).Append('\n');
 
     private static string Cell(string text) => text.Replace("|", "\\|").Replace("\n", "<br>");
+
+    private static int LongestBacktickRun(string text)
+    {
+        int longest = 0, run = 0;
+        foreach (var c in text)
+        {
+            run = c == '`' ? run + 1 : 0;
+            longest = Math.Max(longest, run);
+        }
+
+        return longest;
+    }
 }

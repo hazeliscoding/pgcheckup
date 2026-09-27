@@ -43,7 +43,7 @@ public static class ReportText
 
         if (skipped.Count > 0)
         {
-            parts.Add($"{skipped.Count} skipped ({string.Join(", ", skipped.Select(r => $"{r.Check.Id}: {r.Reason}"))})");
+            parts.Add($"{skipped.Count} skipped ({string.Join(", ", skipped.Select(r => $"{r.Check.Id}: {ValueText.Printable(r.Reason ?? "")}"))})");
         }
 
         return string.Join(" · ", parts);
@@ -67,11 +67,11 @@ public static class ReportText
         report.Results.Where(r => r.Status == CheckStatus.Errored).OrderBy(r => r.Check.Id, StringComparer.Ordinal);
 
     /// <summary>Turns a reason such as "timed out after 5 s" into a sentence: "Timed out after 5 s."</summary>
-    /// <param name="reason">A lowercase reason, or <see langword="null"/>.</param>
-    /// <returns>The reason capitalized and ending in a full stop.</returns>
+    /// <param name="reason">A lowercase reason, or <see langword="null"/>. A server error can quote object names in it.</param>
+    /// <returns>The reason capitalized, ending in a full stop, and safe to print.</returns>
     public static string Sentence(string? reason)
     {
-        var text = string.IsNullOrEmpty(reason) ? "it failed" : reason;
+        var text = ValueText.Printable(string.IsNullOrEmpty(reason) ? "it failed" : reason);
         return char.ToUpperInvariant(text[0]) + text[1..] + (text.EndsWith('.') ? "" : ".");
     }
 }

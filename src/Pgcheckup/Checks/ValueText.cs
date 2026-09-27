@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 
 namespace Pgcheckup.Checks;
 
@@ -23,9 +24,38 @@ public static class ValueText
             DateTime time => time.ToUniversalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) + " UTC",
             bool flag => flag ? "on" : "off",
             IFormattable number => number.ToString(null, CultureInfo.InvariantCulture),
-            _ => value.ToString() ?? "",
+            _ => Printable(value.ToString() ?? ""),
         },
     };
+
+    /// <summary>Makes text from the database safe to print: control characters become <c>\uXXXX</c>.</summary>
+    /// <param name="text">Text such as an object name, which anyone who can create a table controls.</param>
+    /// <returns>
+    /// The text with every control character escaped, including line breaks, so it can't move the
+    /// cursor, rewrite a terminal line, set the clipboard or break out of Markdown.
+    /// </returns>
+    public static string Printable(string text)
+    {
+        if (!text.Any(char.IsControl))
+        {
+            return text;
+        }
+
+        var printable = new StringBuilder(text.Length + 8);
+        foreach (var c in text)
+        {
+            if (char.IsControl(c))
+            {
+                printable.Append(CultureInfo.InvariantCulture, $"\\u{(int)c:x4}");
+            }
+            else
+            {
+                printable.Append(c);
+            }
+        }
+
+        return printable.ToString();
+    }
 
     /// <summary>Prints a size with Postgres's units (1024-based, as in pg_size_pretty) and three significant digits.</summary>
     /// <param name="bytes">The size in bytes.</param>

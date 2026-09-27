@@ -79,6 +79,14 @@ public class TemplateRenderTests
         Assert.Equal(expected, RenderOne(value));
     }
 
+    // Object names come from the database, and anyone who can create a table can put terminal
+    // escape sequences or line breaks in one.
+    [Fact]
+    public void Escapes_control_characters_in_text_values()
+    {
+        Assert.Equal("orders\\u001b[2K\\u000aDROP", RenderOne("orders\u001b[2K\nDROP"));
+    }
+
     [Fact]
     public void Prints_decimals_and_timestamps_without_culture()
     {

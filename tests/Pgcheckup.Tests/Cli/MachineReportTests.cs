@@ -137,6 +137,21 @@ public class MachineReportTests
     }
 
     [Fact]
+    public void Fences_a_fix_with_more_backticks_than_it_contains()
+    {
+        var report = new ScanReport(Server,
+        [
+            new CheckResult(Check("a"), CheckStatus.Found,
+                [new Finding("a", "x\u001b", Severity.Warning, "A.", "DROP TABLE \"a```b\";", new Dictionary<string, object?>())]),
+        ]);
+
+        var markdown = MarkdownReport.Write(report);
+
+        Assert.Contains("````\nDROP TABLE \"a```b\";\n````\n", markdown);
+        Assert.Contains("**`a`** · x\\u001b\n", markdown);
+    }
+
+    [Fact]
     public void Writes_only_the_summary_when_nothing_was_found()
     {
         var report = new ScanReport(Server with { Provider = null }, [new CheckResult(Check("a"), CheckStatus.Passed, [])]);
