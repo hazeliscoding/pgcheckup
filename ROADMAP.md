@@ -93,6 +93,7 @@ pgcheckup is a read-only CLI (.NET 10, NativeAOT) that checks a PostgreSQL datab
 - [ ] Release workflow: NativeAOT binaries for linux-x64, linux-arm64, osx-arm64 and win-x64 on GitHub Releases, with SHA-256 checksums.
 - [ ] Container image on GHCR (amd64, arm64), and a GitHub Actions example in the README.
 - [ ] Error messages: connection, TLS, authentication and missing-privilege failures each say what to do next.
+- [ ] Postgres 14 reaches end of life on 2026-11-12. Move it to best effort: drop it from the CI matrix, where `postgres-eol`'s healthy fixture starts failing on it that day.
 - [ ] Dogfooding log: scan real databases, including at least one managed provider, and record every false alarm and every missed problem.
 - [ ] Launch gates: README quick start tested on a clean machine, supported platforms and Postgres versions documented, `CONTRIBUTING.md` with build and test steps, `SECURITY.md`, no known critical bugs, and green CI.
 
