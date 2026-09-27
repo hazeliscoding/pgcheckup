@@ -8,7 +8,7 @@ privileges: [pg_read_all_stats]
 thresholds:
   min_duration: 1h
   min_idle: 10min
-message: "Session {subject} ({role_name} on {database}) has had a transaction open for {open_for}[ and has been idle in it for {idle_for}]."
+message: "Session {subject}[ ({role_name} on {database})] has had a transaction open for {open_for}[ and has been idle in it for {idle_for}]."
 fix: |
   if the session is stuck or abandoned, end it:
   SELECT pg_terminate_backend({subject});
