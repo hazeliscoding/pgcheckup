@@ -25,12 +25,24 @@ public class GrantTests(PostgresServerFixture postgres) : IClassFixture<Postgres
             ALTER ROLE checkup SET default_transaction_read_only = on;
 
             -- Only integer-exhaustion needs these. They show sequence counters, never table rows.
-            -- Repeat them for each schema with sequences, as the role that creates them.
+            -- Repeat them for each schema with sequences. The second covers sequences that app,
+            -- the role that owns your tables, creates later; name another with --owner.
             GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO checkup;
-            ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON SEQUENCES TO checkup;
+            ALTER DEFAULT PRIVILEGES FOR ROLE app IN SCHEMA public GRANT SELECT ON SEQUENCES TO checkup;
 
             """.ReplaceLineEndings("\n"),
-            GrantScript.Build("checkup", "app"));
+            GrantScript.Build("checkup", "app", "app"));
+    }
+
+    [Theory]
+    [InlineData("check\nup")]
+    [InlineData("check\u001bup")]
+    public void Refuses_a_name_with_control_characters(string name)
+    {
+        // A line break would end the -- comment the name appears in, and run the rest as SQL.
+        Assert.Throws<ArgumentException>(() => GrantScript.Build(name, "app", "app"));
+        Assert.Throws<ArgumentException>(() => GrantScript.Build("checkup", name, "app"));
+        Assert.Throws<ArgumentException>(() => GrantScript.Build("checkup", "app", name));
     }
 
     [Theory]
@@ -41,15 +53,17 @@ public class GrantTests(PostgresServerFixture postgres) : IClassFixture<Postgres
     [InlineData("checkup_2", "checkup_2")]
     public void Quotes_names_that_need_it(string name, string quoted)
     {
-        Assert.Contains($"CREATE ROLE {quoted} LOGIN;", GrantScript.Build(name, "app"));
-        Assert.Contains($"GRANT CONNECT ON DATABASE {quoted} TO", GrantScript.Build("checkup", name));
+        Assert.Contains($"CREATE ROLE {quoted} LOGIN;", GrantScript.Build(name, "app", "app"));
+        Assert.Contains($"GRANT CONNECT ON DATABASE {quoted} TO", GrantScript.Build("checkup", name, "app"));
+        Assert.Contains($"FOR ROLE {quoted} IN SCHEMA", GrantScript.Build("checkup", "app", name));
     }
 
     // The printed SQL must actually produce a role that scans cleanly and can't write.
     [Fact]
     public async Task Creates_a_role_that_scans_every_check_and_cannot_write()
     {
-        var statements = FixtureScript.Parse(GrantScript.Build("scanner", "app")).Statements.Select(s => s.Sql);
+        // The test server's tables belong to its superuser, postgres.
+        var statements = FixtureScript.Parse(GrantScript.Build("scanner", "app", "postgres")).Statements.Select(s => s.Sql);
         await postgres.Server.ExecuteAsSuperuserAsync(Cancel, [.. statements, "ALTER ROLE scanner PASSWORD 'scanner'"]);
         var scanner = postgres.Server.Checkup;
         scanner.Username = "scanner";
