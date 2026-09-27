@@ -6,8 +6,7 @@ WITH settings AS (
                AND coalesce(current_setting('archive_library', true), '') = '' AS unset
 ),
 archiver AS (
-    SELECT coalesce(a.last_failed_time > coalesce(a.last_archived_time, '-infinity'), false) AS failing,
-           coalesce(a.last_archived_time, a.stats_reset, pg_postmaster_start_time()) AS good_since
+    SELECT coalesce(a.last_failed_time > coalesce(a.last_archived_time, '-infinity'), false) AS failing
     FROM pg_stat_archiver AS a
 ),
 ready AS (
@@ -23,12 +22,15 @@ SELECT 'archive_command' AS subject,
 FROM settings AS s
 WHERE s.archive_mode <> 'off' AND s.unset
 UNION ALL
-SELECT 'archiver', NULL, now() - a.good_since, NULL, NULL
-FROM settings AS s, archiver AS a
+-- Both of these go by how long the oldest segment has waited: the archiver retries a brief
+-- failure, and on a quiet server the last success can be long ago without anything wrong.
+SELECT 'archiver', NULL, now() - r.oldest, NULL, NULL
+FROM settings AS s, archiver AS a, ready AS r
 WHERE s.archive_mode <> 'off' AND NOT s.unset AND a.failing
+  AND r.oldest < now() - @min_duration
 UNION ALL
 -- A hung archiver logs no failure, so only the age of the waiting segments shows it.
 SELECT 'archive_status', NULL, NULL, r.segments, now() - r.oldest
 FROM settings AS s, archiver AS a, ready AS r
 WHERE s.archive_mode <> 'off' AND NOT s.unset AND NOT a.failing
-  AND r.oldest < now() - @max_ready_age
+  AND r.oldest < now() - @min_duration

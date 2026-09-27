@@ -1,5 +1,6 @@
 -- server archive_mode = on
 -- server archive_command = false
+-- threshold min_duration = 0s
 -- `false` always fails. Switching WAL gives the archiver a segment to try, then this waits
 -- until the archiver has reported its first failure.
 CREATE TABLE fixture_wal AS SELECT g FROM generate_series(1, 1000) AS g;
