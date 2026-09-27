@@ -13,7 +13,7 @@ Most of these failures show up in the system catalogs weeks ahead: a table's tra
 
 > **Status:** early development. The 15 checks of v0.1 run end to end, but there is no release to install yet. See [ROADMAP.md](ROADMAP.md).
 
-![pgcheckup scanning a database whose inactive replication slot is holding 1.07 GB of WAL](docs/scan.gif)
+![pgcheckup scanning a database: an inactive replication slot holding 1.07 GB of WAL, no WAL limit for slots, and no timeout for idle transactions](docs/scan.gif)
 
 ## How it works
 
