@@ -228,13 +228,36 @@ public static class Frontmatter
             if (end > 0 && (after.Length == 0 || after[0] == '#'))
             {
                 var inner = value.Substring(1, end - 1);
-                return quote == '"'
-                    ? inner.Replace("\\\"", "\"").Replace("\\\\", "\\")
-                    : inner.Replace("''", "'");
+                return quote == '"' ? Unescape(inner) : inner.Replace("''", "'");
             }
         }
 
         var comment = value.IndexOf(" #", System.StringComparison.Ordinal);
         return comment >= 0 ? value.Substring(0, comment).TrimEnd() : value;
+    }
+
+    // The escapes YAML gives double-quoted scalars that a template can use.
+    private static string Unescape(string text)
+    {
+        var result = new StringBuilder(text.Length);
+        for (var i = 0; i < text.Length; i++)
+        {
+            if (text[i] == '\\' && i + 1 < text.Length)
+            {
+                i++;
+                result.Append(text[i] switch
+                {
+                    'n' => '\n',
+                    't' => '\t',
+                    _ => text[i],
+                });
+            }
+            else
+            {
+                result.Append(text[i]);
+            }
+        }
+
+        return result.ToString();
     }
 }

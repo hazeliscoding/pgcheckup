@@ -108,6 +108,18 @@ public class CheckCompilerTests
     }
 
     [Fact]
+    public void Reads_escaped_line_breaks_in_double_quoted_scalars_as_yaml_does()
+    {
+        var frontmatter = ValidFrontmatter.Replace("""
+            fix: |
+              Do this:
+              SELECT 1;
+            """, "fix: \"Do this:\\nSELECT 1;\"");
+
+        Assert.Equal("'Do this:\nSELECT 1;'", TemplateText.Describe(Compile(Markdown(frontmatter)).Check!.Fix));
+    }
+
+    [Fact]
     public void Requires_frontmatter()
     {
         var error = SingleError(Compile(ValidBody));
