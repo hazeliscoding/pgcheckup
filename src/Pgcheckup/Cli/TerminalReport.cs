@@ -33,7 +33,7 @@ public static class TerminalReport
     {
         var server = report.Server;
         var provider = server.Provider is { } managed ? $" · {managed.Name}" : "";
-        output.WriteLine($"pgcheckup · {server.Database} on {server.Host} · PostgreSQL {server.Version}{provider}");
+        output.WriteLine($"pgcheckup · {ValueText.Printable(server.Database)} on {ValueText.Printable(server.Host)} · PostgreSQL {server.Version}{provider}");
         output.WriteLine();
 
         foreach (var finding in ReportText.OrderedFindings(report))

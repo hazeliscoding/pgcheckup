@@ -104,6 +104,19 @@ public class TerminalReportTests
     }
 
     [Fact]
+    public void Escapes_control_characters_from_the_server()
+    {
+        var report = new ScanReport(Server with { Database = "app\u001b]52;c;x\u0007" },
+            [new CheckResult(Check("a"), CheckStatus.Errored, [], "42P01: relation \"t\u001b[2K\" does not exist")]);
+
+        var output = Render(report);
+
+        Assert.DoesNotContain("\u001b", output);
+        Assert.DoesNotContain("\u0007", output);
+        Assert.Contains("app\\u001b]52;c;x\\u0007 on", output);
+    }
+
+    [Fact]
     public void Lists_skipped_checks_with_their_reasons_in_the_summary()
     {
         var report = new ScanReport(Server,
