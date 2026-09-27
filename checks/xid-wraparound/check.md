@@ -8,8 +8,8 @@ privileges: []
 thresholds:
   warning_age: 500000000
   critical_age: 1500000000
-message: "[Database {database}][Table {table_name}] has used {xid_age:count} of its 2.1 billion transaction IDs."
-fix: "[connect to {database} and scan it to find its oldest tables, then freeze them.][VACUUM (FREEZE, VERBOSE) {table_name};]"
+message: "[Database {database}][Table {table_name}][Temporary table {temp_table}] has used {xid_age:count} of its 2.1 billion transaction IDs."
+fix: "[connect to {database} and scan it to find its oldest tables, then freeze them.][VACUUM (FREEZE, VERBOSE) {table_name};][only the session that created {temp_table} can vacuum it, so have it drop the table, or end that session.]"
 ---
 
 ## What breaks
@@ -20,7 +20,7 @@ Long before that, at 200 million by default (`autovacuum_freeze_max_age`), autov
 
 The usual cause is something that holds vacuum back: a long transaction, a forgotten prepared transaction or an inactive replication slot. The checks `long-transaction`, `prepared-transaction-orphaned` and `replication-slot-inactive` look for those.
 
-This check measures tables in the database it connects to, and every other database in the cluster as a whole. It lists at most the 20 oldest tables.
+This check measures tables in the database it connects to, and every other database in the cluster as a whole. It lists at most the 20 oldest tables, including temporary ones: only the session that created a temporary table can vacuum it, so a pooled connection that keeps one for months ages the whole database.
 
 ## Fix
 
