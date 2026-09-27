@@ -62,7 +62,7 @@ pgcheckup is a read-only CLI (.NET 10, NativeAOT) that checks a PostgreSQL datab
 - [x] Engine: server version and provider detection, and a privilege probe, followed by every applicable check. A check that errors or times out is reported as errored, and the others still run.
 - [x] Provider detection, tested by simulating each provider's roles and settings in fixtures.
 - [x] Desk research for the catalog: go through public Postgres postmortems (danluu/post-mortems, engineering blogs) and DBA Stack Exchange, list the failures that recur, and adjust the table below to match. Every check gets at least one **Seen in** link.
-- [ ] The v0.1 checks:
+- [x] The v0.1 checks:
 
 | Check | Catches |
 |---|---|
